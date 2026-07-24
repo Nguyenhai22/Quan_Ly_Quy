@@ -16,8 +16,11 @@ let cleaningList = [];
 let cleaningViewMonth = (function(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); })();
 
 const TYPE_LABEL = {
+  // Khoản thu (tiền nộp vào quỹ)
+  nop_quy:'Nộp quỹ', quy_an_uong:'Quỹ ăn uống', thu_khac:'Khoản thu khác',
+  // Khoản chi (tiền chi ra từ quỹ)
   thue_phong:'Tiền thuê phòng', tien_dien:'Tiền điện', tien_nuoc:'Tiền nước',
-  internet:'Internet', quy_chung:'Quỹ chung', phat_sinh:'Phát sinh',
+  internet:'Internet', quy_chung:'Quỹ chung', phat_sinh:'Chi phát sinh',
   do_dung_chung:'Đồ dùng chung', sua_chua:'Sửa chữa', ve_sinh:'Vệ sinh', sinh_hoat:'Sinh hoạt'
 };
 const ROLE_LABEL = {truong_phong:'Trưởng phòng', thu_quy:'Thủ quỹ', thanh_vien:'Thành viên'};
@@ -47,6 +50,12 @@ const PAGE_TITLES = {
 };
 
 function canManage(){ return myProfile && (myProfile.role==='truong_phong' || myProfile.role==='thu_quy'); }
+function toggleCustomType(prefix){
+  const val = document.getElementById(prefix+'-type').value;
+  const wrap = document.getElementById(prefix+'-type-custom-wrap');
+  if(wrap) wrap.classList.toggle('hidden', val!=='__custom__');
+}
+function typeLabelOf(code){ return TYPE_LABEL[code] || code; }
 function fmtVND(n){ return (Math.round(n||0)).toLocaleString('vi-VN')+' đ'; }
 function toast(msg, type='ok'){
   const wrap = document.getElementById('toast-wrap');
@@ -363,7 +372,7 @@ function renderIncome(){
   tbody.innerHTML = rows.map(x=>`
     <tr>
       <td>${x.hinh_anh_url ? `<img src="${x.hinh_anh_url}" class="thumb" onclick="showImage('${x.hinh_anh_url}')">` : '—'}</td>
-      <td><span class="tag green">${TYPE_LABEL[x.loai]}</span></td>
+      <td><span class="tag green">${typeLabelOf(x.loai)}</span></td>
       <td>${x.mo_ta||'—'}</td>
       <td class="num" style="color:var(--green);font-weight:700">${fmtVND(x.so_tien)}</td>
       <td>${x.thang}</td>
@@ -373,19 +382,26 @@ function renderIncome(){
 }
 function openIncomeModal(){
   document.getElementById('income-id').value='';
-  document.getElementById('income-type').value='thue_phong';
+  document.getElementById('income-type').value='nop_quy';
   document.getElementById('income-amount').value='';
   document.getElementById('income-month').value=currentMonthStr();
   document.getElementById('income-desc').value='';
   document.getElementById('income-image').value='';
+  document.getElementById('income-type-custom').value='';
+  toggleCustomType('income');
   openModalEl('modal-income');
 }
 async function saveIncome(){
   const amount = Number(document.getElementById('income-amount').value);
   if(!amount || amount<=0){ toast('Vui lòng nhập số tiền hợp lệ','err'); return; }
+  let loai = document.getElementById('income-type').value;
+  if(loai==='__custom__'){
+    loai = document.getElementById('income-type-custom').value.trim();
+    if(!loai){ toast('Vui lòng nhập tên loại khoản thu','err'); return; }
+  }
   let imgUrl = await uploadReceipt(document.getElementById('income-image'), 'income');
   const payload = {
-    loai: document.getElementById('income-type').value,
+    loai,
     so_tien: amount,
     mo_ta: document.getElementById('income-desc').value.trim(),
     thang: document.getElementById('income-month').value || currentMonthStr(),
@@ -393,7 +409,7 @@ async function saveIncome(){
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
   await sb.from('income').insert(payload);
-  await logActivity('them','income', null, `Thêm khoản thu ${TYPE_LABEL[payload.loai]}: ${fmtVND(amount)}`);
+  await logActivity('them','income', null, `Thêm khoản thu ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
   closeModal('modal-income');
   await loadIncome(); populateMonthFilters(); renderIncome(); renderDashboard(); renderReports();
   toast('Đã thêm khoản thu');
@@ -418,7 +434,7 @@ function renderExpenses(){
   tbody.innerHTML = rows.map(x=>`
     <tr>
       <td>${x.hinh_anh_url ? `<img src="${x.hinh_anh_url}" class="thumb" onclick="showImage('${x.hinh_anh_url}')">` : '—'}</td>
-      <td><span class="tag red">${TYPE_LABEL[x.loai]}</span></td>
+      <td><span class="tag red">${typeLabelOf(x.loai)}</span></td>
       <td>${x.mo_ta||'—'}</td>
       <td class="num" style="color:var(--red);font-weight:700">${fmtVND(x.so_tien)}</td>
       <td>${x.thang}</td>
@@ -434,14 +450,21 @@ function openExpenseModal(){
   document.getElementById('expense-month').value=currentMonthStr();
   document.getElementById('expense-desc').value='';
   document.getElementById('expense-image').value='';
+  document.getElementById('expense-type-custom').value='';
+  toggleCustomType('expense');
   openModalEl('modal-expense');
 }
 async function saveExpense(){
   const amount = Number(document.getElementById('expense-amount').value);
   if(!amount || amount<=0){ toast('Vui lòng nhập số tiền hợp lệ','err'); return; }
+  let loai = document.getElementById('expense-type').value;
+  if(loai==='__custom__'){
+    loai = document.getElementById('expense-type-custom').value.trim();
+    if(!loai){ toast('Vui lòng nhập tên loại khoản chi','err'); return; }
+  }
   let imgUrl = await uploadReceipt(document.getElementById('expense-image'), 'expenses');
   const payload = {
-    loai: document.getElementById('expense-type').value,
+    loai,
     so_tien: amount,
     mo_ta: document.getElementById('expense-desc').value.trim(),
     thang: document.getElementById('expense-month').value || currentMonthStr(),
@@ -449,7 +472,7 @@ async function saveExpense(){
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
   await sb.from('expenses').insert(payload);
-  await logActivity('them','expenses', null, `Thêm khoản chi ${TYPE_LABEL[payload.loai]}: ${fmtVND(amount)}`);
+  await logActivity('them','expenses', null, `Thêm khoản chi ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
   closeModal('modal-expense');
   await loadExpenses(); populateMonthFilters(); renderExpenses(); renderDashboard(); renderReports();
   toast('Đã thêm khoản chi');
@@ -474,7 +497,7 @@ function quickSplitFromExpense(id){
 let splitSourceExpense = null;
 function openSplitModal(expense){
   splitSourceExpense = expense || null;
-  document.getElementById('split-name').value = expense ? `${TYPE_LABEL[expense.loai]} - ${expense.thang}` : '';
+  document.getElementById('split-name').value = expense ? `${typeLabelOf(expense.loai)} - ${expense.thang}` : '';
   document.getElementById('split-total').value = expense ? expense.so_tien : '';
   document.getElementById('split-month').value = expense ? expense.thang : currentMonthStr();
   document.getElementById('split-method').value = 'deu';
@@ -770,7 +793,7 @@ function renderStatistics(){
 
   const structure = {};
   expenseList.forEach(x=>{ structure[x.loai] = (structure[x.loai]||0) + Number(x.so_tien); });
-  const labels = Object.keys(structure).map(k=>TYPE_LABEL[k]||k);
+  const labels = Object.keys(structure).map(k=>typeLabelOf(k));
   const vals = Object.values(structure);
   if(chartExpenseStructure) chartExpenseStructure.destroy();
   chartExpenseStructure = new Chart(document.getElementById('chart-expense-structure'), {
