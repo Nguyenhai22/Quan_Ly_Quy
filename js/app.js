@@ -166,10 +166,12 @@ function go(pageId){
 }
 function applyRoleVisibility(){
   const manage = canManage();
-  ['btn-add-member','btn-add-income','btn-add-expense'].forEach(id=>{
+  ['btn-add-member','btn-add-income'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display = manage ? '' : 'none';
   });
+  const expBtn = document.getElementById('btn-add-expense');
+  if(expBtn) expBtn.style.display = ''; // tất cả thành viên đều được thêm khoản chi
 }
 
 // ============================================================
@@ -200,11 +202,13 @@ async function loadMembers(){
   members = data || [];
 }
 async function loadIncome(){
-  const {data} = await sb.from('income').select('*').order('created_at', {ascending:false});
+  const {data, error} = await sb.from('income').select('*').order('created_at', {ascending:false});
+  if(error){ toast('Không tải được khoản thu: '+error.message, 'err'); }
   incomeList = data || [];
 }
 async function loadExpenses(){
-  const {data} = await sb.from('expenses').select('*').order('created_at', {ascending:false});
+  const {data, error} = await sb.from('expenses').select('*').order('created_at', {ascending:false});
+  if(error){ toast('Không tải được khoản chi: '+error.message, 'err'); }
   expenseList = data || [];
 }
 async function loadSplits(){
@@ -408,7 +412,8 @@ async function saveIncome(){
     nguoi_tao: currentUser.id,
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
-  await sb.from('income').insert(payload);
+  const {error} = await sb.from('income').insert(payload);
+  if(error){ toast('Lỗi khi lưu: '+error.message, 'err'); return; }
   await logActivity('them','income', null, `Thêm khoản thu ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
   closeModal('modal-income');
   await loadIncome(); populateMonthFilters(); renderIncome(); renderDashboard(); renderReports();
@@ -471,7 +476,8 @@ async function saveExpense(){
     nguoi_tao: currentUser.id,
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
-  await sb.from('expenses').insert(payload);
+  const {error} = await sb.from('expenses').insert(payload);
+  if(error){ toast('Lỗi khi lưu: '+error.message, 'err'); return; }
   await logActivity('them','expenses', null, `Thêm khoản chi ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
   closeModal('modal-expense');
   await loadExpenses(); populateMonthFilters(); renderExpenses(); renderDashboard(); renderReports();
