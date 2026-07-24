@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quỹ Phòng — Quản lý quỹ chung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ================= AUTH SCREEN ================= -->
+<div id="auth-screen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="mark">Q</div>
+    <div id="login-form">
+      <h2>Đăng nhập</h2>
+      <p class="sub">Quản lý quỹ phòng chung</p>
+      <div id="login-error" class="auth-error hidden"></div>
+      <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="ban@email.com"></div>
+      <div class="field"><label>Mật khẩu</label><input type="password" id="login-password" placeholder="••••••••"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">Đăng nhập</button>
+      <div class="auth-toggle">Chưa có tài khoản? <a onclick="toggleAuth('register')">Đăng ký ngay</a></div>
+    </div>
+    <div id="register-form" class="hidden">
+      <h2>Đăng ký</h2>
+      <p class="sub">Tạo tài khoản thành viên phòng</p>
+      <div id="register-error" class="auth-error hidden"></div>
+      <div class="field"><label>Họ tên</label><input type="text" id="reg-name" placeholder="Nguyễn Văn A"></div>
+      <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="ban@email.com"></div>
+      <div class="field"><label>Số điện thoại</label><input type="text" id="reg-phone" placeholder="09xxxxxxxx"></div>
+      <div class="field"><label>Mật khẩu</label><input type="password" id="reg-password" placeholder="Tối thiểu 6 ký tự"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doRegister()">Tạo tài khoản</button>
+      <div class="auth-toggle">Đã có tài khoản? <a onclick="toggleAuth('login')">Đăng nhập</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="hidden">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><div class="mark">Q</div> Quỹ Phòng</div>
+    <nav class="nav" id="nav-menu"></nav>
+    <div class="sidebar-foot">
+      <div class="foot-avatar" id="foot-avatar-letter">?</div>
+      <div class="foot-info">
+        <div class="foot-name" id="foot-username">—</div>
+        <div class="foot-role" id="foot-role">Thành viên</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="btn icon-btn mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+        <div>
+          <h1 id="page-title">Trang chủ</h1>
+          <div class="sub" id="page-sub">Tổng quan quỹ phòng</div>
+        </div>
+      </div>
+      <div class="userchip">
+        <span class="role-badge" id="role-badge">—</span>
+        <span class="topbar-name" id="topbar-username">—</span>
+        <div class="av" id="user-avatar">?</div>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">Đăng xuất</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ===== DASHBOARD ===== -->
+      <section class="page active" id="page-dashboard">
+        <div class="grid grid-4">
+          <div class="card stat-card balance"><div class="label">Số dư hiện tại</div><div class="value" id="stat-balance">0 đ</div><div class="trend">Thu − Chi</div></div>
+          <div class="card stat-card income"><div class="label">Tổng thu</div><div class="value" id="stat-income">0 đ</div><div class="trend" id="stat-income-count">0 khoản</div></div>
+          <div class="card stat-card expense"><div class="label">Tổng chi</div><div class="value" id="stat-expense">0 đ</div><div class="trend" id="stat-expense-count">0 khoản</div></div>
+          <div class="card stat-card"><div class="label">Thành viên</div><div class="value" id="stat-members">0</div><div class="trend" id="stat-members-sub">đang ở phòng</div></div>
+        </div>
+
+        <div class="section-title"><h2>Thông báo mới</h2><span class="hint" onclick="go('notifications')" style="cursor:pointer">Xem tất cả →</span></div>
+        <div class="table-wrap" id="dashboard-notifications"><div class="empty">Đang tải…</div></div>
+
+        <div class="section-title"><h2>Hoạt động gần đây</h2><span class="hint" onclick="go('activity')" style="cursor:pointer">Xem tất cả →</span></div>
+        <div class="table-wrap" id="dashboard-activity"><div class="empty">Đang tải…</div></div>
+      </section>
+
+      <!-- ===== MEMBERS ===== -->
+      <section class="page" id="page-members">
+        <div class="section-title"><h2>Danh sách thành viên</h2>
+          <button class="btn btn-primary" id="btn-add-member" onclick="openMemberModal()">+ Thêm thành viên</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Thành viên</th><th>SĐT</th><th>Vai trò</th><th>Ngày tham gia</th><th>Ngày rời</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody id="members-tbody"><tr><td colspan="7" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== INCOME ===== -->
+      <section class="page" id="page-income">
+        <div class="section-title"><h2>Khoản thu</h2>
+          <button class="btn btn-amber" id="btn-add-income" onclick="openIncomeModal()">+ Thêm khoản thu</button>
+        </div>
+        <div class="filters">
+          <select id="income-filter-month" onchange="renderIncome()"></select>
+          <select id="income-filter-type" onchange="renderIncome()">
+            <option value="">Tất cả loại</option>
+            <option value="thue_phong">Tiền thuê phòng</option>
+            <option value="tien_dien">Tiền điện</option>
+            <option value="tien_nuoc">Tiền nước</option>
+            <option value="internet">Internet</option>
+            <option value="quy_chung">Quỹ chung</option>
+            <option value="phat_sinh">Phát sinh</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Ảnh</th><th>Loại</th><th>Mô tả</th><th>Số tiền</th><th>Tháng</th><th>Người tạo</th><th></th></tr></thead>
+            <tbody id="income-tbody"><tr><td colspan="7" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== EXPENSES ===== -->
+      <section class="page" id="page-expenses">
+        <div class="section-title"><h2>Khoản chi</h2>
+          <button class="btn btn-amber" id="btn-add-expense" onclick="openExpenseModal()">+ Thêm khoản chi</button>
+        </div>
+        <div class="filters">
+          <select id="expense-filter-month" onchange="renderExpenses()"></select>
+          <select id="expense-filter-type" onchange="renderExpenses()">
+            <option value="">Tất cả loại</option>
+            <option value="do_dung_chung">Mua đồ dùng chung</option>
+            <option value="sua_chua">Tiền sửa chữa</option>
+            <option value="ve_sinh">Tiền vệ sinh</option>
+            <option value="sinh_hoat">Tiền sinh hoạt</option>
+            <option value="phat_sinh">Chi phát sinh</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Ảnh</th><th>Loại</th><th>Mô tả</th><th>Số tiền</th><th>Tháng</th><th>Người tạo</th><th></th></tr></thead>
+            <tbody id="expenses-tbody"><tr><td colspan="7" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== SPLIT ===== -->
+      <section class="page" id="page-split">
+        <div class="section-title"><h2>Chia chi phí</h2>
+          <button class="btn btn-primary" onclick="openSplitModal()">+ Tạo phiếu chia chi phí</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tên phiếu</th><th>Tổng tiền</th><th>Phương thức</th><th>Tháng</th><th>Đã tạo</th><th></th></tr></thead>
+            <tbody id="splits-tbody"><tr><td colspan="6" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== PAYMENTS ===== -->
+      <section class="page" id="page-payments">
+        <div class="section-title"><h2>Quỹ chung hàng tháng</h2>
+          <span class="hint">Ai đã nộp quỹ, ai chưa nộp — theo từng tháng</span>
+        </div>
+        <div class="filters">
+          <select id="dues-month" onchange="renderMonthlyDues()"></select>
+          <span id="dues-manage-controls" style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="dues-amount-input" placeholder="Mức quỹ / người (đ)" style="width:170px">
+            <button class="btn btn-primary btn-sm" onclick="setMonthlyDueAmount()">Áp dụng cho tháng này</button>
+          </span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Thành viên</th><th>Số tiền cần nộp</th><th>Trạng thái</th><th>Ngày nộp</th><th></th></tr></thead>
+            <tbody id="dues-tbody"><tr><td colspan="5" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="section-title"><h2>Công nợ theo phiếu chia chi phí</h2>
+          <span class="hint">Theo dõi ai đã trả, ai còn nợ cho từng phiếu chia</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Thành viên</th><th>Phiếu chia</th><th>Số tiền phải trả</th><th>Trạng thái</th><th>Ngày thanh toán</th><th></th></tr></thead>
+            <tbody id="payments-tbody"><tr><td colspan="6" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== REPORTS ===== -->
+      <section class="page" id="page-reports">
+        <div class="section-title"><h2>Báo cáo</h2>
+          <button class="btn" onclick="exportReportCSV()">⬇ Xuất CSV</button>
+        </div>
+        <div class="filters"><select id="report-month" onchange="renderReports()"></select></div>
+        <div class="grid grid-4">
+          <div class="card stat-card income"><div class="label">Tổng thu (tháng)</div><div class="value" id="rep-income">0 đ</div></div>
+          <div class="card stat-card expense"><div class="label">Tổng chi (tháng)</div><div class="value" id="rep-expense">0 đ</div></div>
+          <div class="card stat-card balance"><div class="label">Chênh lệch</div><div class="value" id="rep-diff">0 đ</div></div>
+          <div class="card stat-card"><div class="label">Công nợ còn lại</div><div class="value" id="rep-debt">0 đ</div></div>
+        </div>
+        <div class="section-title"><h2>Chi tiết theo tháng</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tháng</th><th>Tổng thu</th><th>Tổng chi</th><th>Số dư ròng</th></tr></thead>
+            <tbody id="report-tbody"><tr><td colspan="4" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== NOTIFICATIONS ===== -->
+      <section class="page" id="page-notifications">
+        <div class="section-title"><h2>Thông báo</h2>
+          <button class="btn btn-primary" onclick="openNotifModal()">+ Tạo thông báo</button>
+        </div>
+        <div class="table-wrap" id="notif-list"><div class="empty">Đang tải…</div></div>
+      </section>
+
+      <!-- ===== ACTIVITY LOG ===== -->
+      <section class="page" id="page-activity">
+        <div class="section-title"><h2>Nhật ký hoạt động</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Thời gian</th><th>Hành động</th><th>Bảng</th><th>Mô tả</th><th>Người thực hiện</th></tr></thead>
+            <tbody id="activity-tbody"><tr><td colspan="5" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== STATISTICS ===== -->
+      <section class="page" id="page-statistics">
+        <div class="grid grid-2">
+          <div class="chart-wrap"><canvas id="chart-monthly" height="220"></canvas></div>
+          <div class="chart-wrap"><canvas id="chart-expense-structure" height="220"></canvas></div>
+        </div>
+        <div class="section-title"><h2>Thành viên còn nợ</h2></div>
+        <div class="table-wrap" id="debtors-list"><div class="empty">Đang tải…</div></div>
+      </section>
+
+      <!-- ===== CLEANING SCHEDULE ===== -->
+      <section class="page" id="page-cleaning">
+        <div class="cleaning-controls">
+          <div class="cleaning-nav">
+            <button class="btn btn-sm" onclick="changeCleaningMonth(-1)">&#8249; Trước</button>
+            <h2 class="cleaning-month-label" id="cleaning-month-label">Tháng...</h2>
+            <button class="btn btn-sm" onclick="changeCleaningMonth(1)">Sau &#8250;</button>
+          </div>
+          <button class="btn btn-primary" onclick="openCleaningModal('')">🧹 Đăng ký vệ sinh</button>
+        </div>
+
+        <div class="cleaning-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:var(--green-soft);border:1px solid var(--green)"></span>Chưa làm</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#d4edda;border:1px solid var(--green);opacity:.6"></span>Đã hoàn thành</span>
+          <span class="legend-item"><span class="legend-dot" style="background:var(--amber-soft);border:1px solid var(--amber)"></span>Hôm nay</span>
+        </div>
+
+        <div class="card cal-card">
+          <div id="cleaning-calendar"><div class="empty">Đang tải lịch…</div></div>
+        </div>
+
+        <div class="section-title"><h2>Lịch vệ sinh sắp tới</h2><span class="hint">Các ca đăng ký chưa hoàn thành</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Ngày</th><th>Ca</th><th>Thành viên</th><th>Ghi chú</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody id="upcoming-cleaning-list"><tr><td colspan="6" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== ACCOUNT ===== -->
+      <section class="page" id="page-account">
+        <div class="grid grid-2">
+          <div class="card">
+            <h3 style="margin-top:0">Thông tin cá nhân</h3>
+            <div class="field"><label>Họ tên</label><input id="acc-name"></div>
+            <div class="field"><label>Số điện thoại</label><input id="acc-phone"></div>
+            <button class="btn btn-primary" onclick="updateProfile()">Lưu thay đổi</button>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Đổi mật khẩu</h3>
+            <div class="field"><label>Mật khẩu mới</label><input type="password" id="acc-newpass" placeholder="Tối thiểu 6 ký tự"></div>
+            <button class="btn btn-primary" onclick="changePassword()">Đổi mật khẩu</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-backdrop hidden" id="modal-member">
+  <div class="modal">
+    <div class="modal-head"><h3 id="member-modal-title">Thêm thành viên</h3><button class="btn-ghost" onclick="closeModal('modal-member')">✕</button></div>
+    <input type="hidden" id="member-id">
+    <div class="field"><label>Họ tên</label><input id="member-name"></div>
+    <div class="field"><label>Số điện thoại</label><input id="member-phone"></div>
+    <div class="field-row">
+      <div class="field"><label>Vai trò</label>
+        <select id="member-role"><option value="thanh_vien">Thành viên</option><option value="thu_quy">Thủ quỹ</option><option value="truong_phong">Trưởng phòng</option></select>
+      </div>
+      <div class="field"><label>Trạng thái</label>
+        <select id="member-status"><option value="active">Đang ở</option><option value="inactive">Đã rời</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Ngày tham gia</label><input type="date" id="member-join"></div>
+      <div class="field"><label>Ngày rời phòng</label><input type="date" id="member-leave"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-member')">Hủy</button><button class="btn btn-primary" onclick="saveMember()">Lưu</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-income">
+  <div class="modal">
+    <div class="modal-head"><h3 id="income-modal-title">Thêm khoản thu</h3><button class="btn-ghost" onclick="closeModal('modal-income')">✕</button></div>
+    <input type="hidden" id="income-id">
+    <div class="field"><label>Loại khoản thu</label>
+      <select id="income-type">
+        <option value="thue_phong">Tiền thuê phòng</option>
+        <option value="tien_dien">Tiền điện</option>
+        <option value="tien_nuoc">Tiền nước</option>
+        <option value="internet">Internet</option>
+        <option value="quy_chung">Quỹ chung</option>
+        <option value="phat_sinh">Khoản thu phát sinh</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Số tiền (đ)</label><input type="number" id="income-amount" placeholder="0"></div>
+      <div class="field"><label>Tháng</label><input type="month" id="income-month"></div>
+    </div>
+    <div class="field"><label>Mô tả</label><textarea id="income-desc"></textarea></div>
+    <div class="field"><label>Ảnh hóa đơn (không bắt buộc)</label><input type="file" id="income-image" accept="image/*"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-income')">Hủy</button><button class="btn btn-primary" onclick="saveIncome()">Lưu</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-expense">
+  <div class="modal">
+    <div class="modal-head"><h3 id="expense-modal-title">Thêm khoản chi</h3><button class="btn-ghost" onclick="closeModal('modal-expense')">✕</button></div>
+    <input type="hidden" id="expense-id">
+    <div class="field"><label>Loại khoản chi</label>
+      <select id="expense-type">
+        <option value="do_dung_chung">Mua đồ dùng chung</option>
+        <option value="sua_chua">Tiền sửa chữa</option>
+        <option value="ve_sinh">Tiền vệ sinh</option>
+        <option value="sinh_hoat">Tiền sinh hoạt</option>
+        <option value="phat_sinh">Chi phát sinh</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Số tiền (đ)</label><input type="number" id="expense-amount" placeholder="0"></div>
+      <div class="field"><label>Tháng</label><input type="month" id="expense-month"></div>
+    </div>
+    <div class="field"><label>Mô tả</label><textarea id="expense-desc"></textarea></div>
+    <div class="field"><label>Ảnh hóa đơn (không bắt buộc)</label><input type="file" id="expense-image" accept="image/*"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-expense')">Hủy</button><button class="btn btn-primary" onclick="saveExpense()">Lưu</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-split">
+  <div class="modal wide">
+    <div class="modal-head"><h3>Tạo phiếu chia chi phí</h3><button class="btn-ghost" onclick="closeModal('modal-split')">✕</button></div>
+    <div class="field"><label>Tên phiếu</label><input id="split-name" placeholder="VD: Tiền điện tháng 7"></div>
+    <div class="field-row">
+      <div class="field"><label>Tổng số tiền (đ)</label><input type="number" id="split-total" oninput="recalcSplit()"></div>
+      <div class="field"><label>Tháng</label><input type="month" id="split-month"></div>
+    </div>
+    <div class="field"><label>Phương thức chia</label>
+      <select id="split-method" onchange="recalcSplit()">
+        <option value="deu">Chia đều cho tất cả thành viên</option>
+        <option value="theo_ngay">Chia theo số ngày ở trong tháng</option>
+        <option value="theo_nguoi">Chia theo số người chọn</option>
+        <option value="tuy_chinh">Tùy chỉnh số tiền từng người</option>
+      </select>
+    </div>
+    <div class="field" id="split-members-wrap">
+      <label>Số tiền mỗi người</label>
+      <div id="split-members-list"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-split')">Hủy</button><button class="btn btn-primary" onclick="saveSplit()">Tạo phiếu</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-notif">
+  <div class="modal">
+    <div class="modal-head"><h3>Tạo thông báo</h3><button class="btn-ghost" onclick="closeModal('modal-notif')">✕</button></div>
+    <div class="field"><label>Loại</label>
+      <select id="notif-type">
+        <option value="chung">Thông báo chung</option>
+        <option value="nhac_dong_tien">Nhắc đóng tiền</option>
+        <option value="thu_moi">Khoản thu mới</option>
+        <option value="chi_moi">Khoản chi mới</option>
+        <option value="hop_phong">Thông báo họp phòng</option>
+      </select>
+    </div>
+    <div class="field"><label>Tiêu đề</label><input id="notif-title"></div>
+    <div class="field"><label>Nội dung</label><textarea id="notif-content"></textarea></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-notif')">Hủy</button><button class="btn btn-primary" onclick="saveNotif()">Đăng thông báo</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-image">
+  <div class="modal wide" style="text-align:center">
+    <div class="modal-head"><h3>Ảnh hóa đơn</h3><button class="btn-ghost" onclick="closeModal('modal-image')">✕</button></div>
+    <img id="image-preview-src" class="receipt-preview">
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-cleaning">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🧹 Đăng ký lịch vệ sinh</h3>
+      <button class="btn-ghost" onclick="closeModal('modal-cleaning')">✕</button>
+    </div>
+    <div class="field">
+      <label>Ngày vệ sinh</label>
+      <input type="date" id="cleaning-date">
+    </div>
+    <div class="field">
+      <label>Ca vệ sinh</label>
+      <select id="cleaning-ca">
+        <option value="ca_ngay">🌟 Cả ngày</option>
+        <option value="sang">🌅 Buổi sáng</option>
+        <option value="chieu">🌆 Buổi chiều</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Ghi chú <span style="font-weight:400;color:var(--muted)">(không bắt buộc)</span></label>
+      <textarea id="cleaning-note" placeholder="VD: Dọn phòng tắm, lau cầu thang, hút bụi..."></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('modal-cleaning')">Hủy</button>
+      <button class="btn btn-primary" onclick="saveCleaning()">🧹 Đăng ký</button>
+    </div>
+  </div>
+</div>
+
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
