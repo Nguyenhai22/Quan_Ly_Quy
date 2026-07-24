@@ -16,7 +16,7 @@
   --font-num:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0;width:100%;overflow-x:hidden;}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;}
 body{
   font-family:var(--font-ui);
   background:var(--paper);
@@ -30,7 +30,7 @@ input,select,textarea{font-family:inherit;}
 ::selection{background:var(--amber-soft);}
 
 /* ---------- LAYOUT ---------- */
-#app{display:flex;min-height:100vh;width:100%;}
+#app{display:flex;height:100vh;width:100%;overflow:hidden;}
 .sidebar{
   width:240px;flex-shrink:0;
   background:var(--ink);
@@ -74,7 +74,7 @@ input,select,textarea{font-family:inherit;}
 .foot-name{font-weight:700;color:#EAF1EE;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .foot-role{font-size:10.5px;color:var(--amber);text-transform:uppercase;letter-spacing:.3px;}
 
-.main{flex:1;min-width:0;overflow-x:hidden;display:flex;flex-direction:column;}
+.main{flex:1;min-width:0;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;height:100vh;}
 .topbar{
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 28px;background:var(--card);border-bottom:1px solid var(--line);
@@ -273,14 +273,21 @@ tr:hover td{background:#FBFAF6;}
   display:grid;grid-template-columns:repeat(7,1fr);
 }
 .cal-cell{
-  min-height:100px;padding:6px 5px;
+  min-height:100px;max-height:160px;padding:6px 5px;
   border-right:1px solid var(--line);
   border-bottom:1px solid var(--line);
   background:var(--card);
   transition:background .12s;
   position:relative;
-  overflow:hidden;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scrollbar-width:thin;
+  scrollbar-color:var(--line) transparent;
 }
+.cal-cell::-webkit-scrollbar{width:5px;}
+.cal-cell::-webkit-scrollbar-track{background:transparent;}
+.cal-cell::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+.cal-cell::-webkit-scrollbar-thumb:hover{background:var(--muted);}
 .cal-cell:nth-child(7n){border-right:none;}
 .cal-cell.cal-empty{background:#FAF8F3;min-height:100px;}
 .cal-cell.cal-past{background:#F9F9F7;opacity:.75;}
@@ -355,7 +362,7 @@ tr:hover td{background:#FBFAF6;}
   .sidebar.open{left:0;}
   .mobile-toggle{display:flex;}
   .content{padding:18px;}
-  .cal-cell{min-height:70px;padding:3px;}
+  .cal-cell{min-height:70px;max-height:130px;padding:3px;}
   .cal-slot-name{max-width:40px;}
   .cleaning-controls{flex-direction:column;align-items:flex-start;}
 }
