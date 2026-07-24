@@ -108,12 +108,9 @@
           <select id="income-filter-month" onchange="renderIncome()"></select>
           <select id="income-filter-type" onchange="renderIncome()">
             <option value="">Tất cả loại</option>
-            <option value="thue_phong">Tiền thuê phòng</option>
-            <option value="tien_dien">Tiền điện</option>
-            <option value="tien_nuoc">Tiền nước</option>
-            <option value="internet">Internet</option>
-            <option value="quy_chung">Quỹ chung</option>
-            <option value="phat_sinh">Phát sinh</option>
+            <option value="nop_quy">Nộp quỹ</option>
+            <option value="quy_an_uong">Quỹ ăn uống</option>
+            <option value="thu_khac">Khoản thu khác</option>
           </select>
         </div>
         <div class="table-wrap">
@@ -133,6 +130,11 @@
           <select id="expense-filter-month" onchange="renderExpenses()"></select>
           <select id="expense-filter-type" onchange="renderExpenses()">
             <option value="">Tất cả loại</option>
+            <option value="thue_phong">Tiền thuê phòng</option>
+            <option value="tien_dien">Tiền điện</option>
+            <option value="tien_nuoc">Tiền nước</option>
+            <option value="internet">Internet</option>
+            <option value="quy_chung">Quỹ chung</option>
             <option value="do_dung_chung">Mua đồ dùng chung</option>
             <option value="sua_chua">Tiền sửa chữa</option>
             <option value="ve_sinh">Tiền vệ sinh</option>
@@ -322,14 +324,16 @@
     <div class="modal-head"><h3 id="income-modal-title">Thêm khoản thu</h3><button class="btn-ghost" onclick="closeModal('modal-income')">✕</button></div>
     <input type="hidden" id="income-id">
     <div class="field"><label>Loại khoản thu</label>
-      <select id="income-type">
-        <option value="thue_phong">Tiền thuê phòng</option>
-        <option value="tien_dien">Tiền điện</option>
-        <option value="tien_nuoc">Tiền nước</option>
-        <option value="internet">Internet</option>
-        <option value="quy_chung">Quỹ chung</option>
-        <option value="phat_sinh">Khoản thu phát sinh</option>
+      <select id="income-type" onchange="toggleCustomType('income')">
+        <option value="nop_quy">Nộp quỹ</option>
+        <option value="quy_an_uong">Quỹ ăn uống</option>
+        <option value="thu_khac">Khoản thu khác</option>
+        <option value="__custom__">➕ Khác (tự nhập tên)</option>
       </select>
+    </div>
+    <div class="field hidden" id="income-type-custom-wrap">
+      <label>Tên loại khoản thu</label>
+      <input type="text" id="income-type-custom" placeholder="VD: Quỹ sinh nhật">
     </div>
     <div class="field-row">
       <div class="field"><label>Số tiền (đ)</label><input type="number" id="income-amount" placeholder="0"></div>
@@ -346,13 +350,23 @@
     <div class="modal-head"><h3 id="expense-modal-title">Thêm khoản chi</h3><button class="btn-ghost" onclick="closeModal('modal-expense')">✕</button></div>
     <input type="hidden" id="expense-id">
     <div class="field"><label>Loại khoản chi</label>
-      <select id="expense-type">
+      <select id="expense-type" onchange="toggleCustomType('expense')">
+        <option value="thue_phong">Tiền thuê phòng</option>
+        <option value="tien_dien">Tiền điện</option>
+        <option value="tien_nuoc">Tiền nước</option>
+        <option value="internet">Internet</option>
+        <option value="quy_chung">Quỹ chung</option>
         <option value="do_dung_chung">Mua đồ dùng chung</option>
         <option value="sua_chua">Tiền sửa chữa</option>
         <option value="ve_sinh">Tiền vệ sinh</option>
         <option value="sinh_hoat">Tiền sinh hoạt</option>
         <option value="phat_sinh">Chi phát sinh</option>
+        <option value="__custom__">➕ Khác (tự nhập tên)</option>
       </select>
+    </div>
+    <div class="field hidden" id="expense-type-custom-wrap">
+      <label>Tên loại khoản chi</label>
+      <input type="text" id="expense-type-custom" placeholder="VD: Mua bóng đèn">
     </div>
     <div class="field-row">
       <div class="field"><label>Số tiền (đ)</label><input type="number" id="expense-amount" placeholder="0"></div>
