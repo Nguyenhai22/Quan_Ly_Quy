@@ -4,6 +4,7 @@
 let currentUser = null;   // auth user
 let myProfile = null;     // profiles row
 let myRoom = null;        // rooms row (phòng hiện tại)
+let selectedIds = { income: new Set(), expense: new Set(), activity: new Set() };
 let members = [];
 let incomeList = [];
 let expenseList = [];
@@ -68,6 +69,22 @@ function toast(msg, type='ok'){
 }
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 function openModalEl(id){ document.getElementById(id).classList.remove('hidden'); }
+function showConfirm(message, onConfirm, opts={}){
+  document.getElementById('confirm-title').textContent = opts.title || 'Xác nhận';
+  document.getElementById('confirm-message').textContent = message;
+  const okBtn = document.getElementById('confirm-ok-btn');
+  okBtn.textContent = opts.okText || 'Xác nhận';
+  okBtn.className = 'btn ' + (opts.danger===false ? 'btn-primary' : 'btn-danger');
+  const freshBtn = okBtn.cloneNode(true); // gỡ mọi listener cũ tránh gọi trùng
+  okBtn.parentNode.replaceChild(freshBtn, okBtn);
+  freshBtn.addEventListener('click', ()=>{ closeModal('modal-confirm'); onConfirm(); });
+  openModalEl('modal-confirm');
+}
+function showAlert(message, opts={}){
+  document.getElementById('alert-title').textContent = opts.title || 'Thông báo';
+  document.getElementById('alert-message').textContent = message;
+  openModalEl('modal-alert');
+}
 
 // ============================================================
 // AUTH
@@ -108,6 +125,9 @@ async function doLogin(){
   await bootAfterLogin(data.user);
 }
 
+function askLogout(){
+  showConfirm('Bạn có chắc muốn đăng xuất không?', ()=>{ doLogout(); }, {title:'Đăng xuất'});
+}
 async function doLogout(){
   await sb.auth.signOut();
   currentUser = null; myProfile = null; myRoom = null;
@@ -411,11 +431,12 @@ async function saveMember(){
   toast('Đã lưu thành viên');
 }
 async function deleteMember(id){
-  if(!confirm('Xóa thành viên này khỏi danh sách?')) return;
-  await sb.from('profiles').update({status:'inactive'}).eq('id', id);
-  await logActivity('xoa','members', id, 'Đánh dấu thành viên đã rời phòng');
-  await loadMembers(); renderMembers(); renderDashboard();
-  toast('Đã cập nhật trạng thái thành viên');
+  showConfirm('Xóa thành viên này khỏi danh sách?', async ()=>{
+    await sb.from('profiles').update({status:'inactive'}).eq('id', id);
+    await logActivity('xoa','members', id, 'Đánh dấu thành viên đã rời phòng');
+    await loadMembers(); renderMembers(); renderDashboard();
+    toast('Đã cập nhật trạng thái thành viên');
+  });
 }
 
 // ============================================================
@@ -462,17 +483,24 @@ function renderIncome(){
   const typeF = document.getElementById('income-filter-type').value;
   let rows = incomeList.filter(x=>(!monthF||x.thang===monthF)&&(!typeF||x.loai===typeF));
   const tbody = document.getElementById('income-tbody');
-  if(!rows.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty">Không có khoản thu nào.</td></tr>'; return; }
-  tbody.innerHTML = rows.map(x=>`
+  const rowIds = new Set(rows.map(x=>x.id));
+  selectedIds.income.forEach(id=>{ if(!rowIds.has(id)) selectedIds.income.delete(id); });
+  if(!rows.length){ tbody.innerHTML = '<tr><td colspan="8" class="empty">Không có khoản thu nào.</td></tr>'; updateBulkBar('income'); return; }
+  tbody.innerHTML = rows.map(x=>{
+    const canDel = canManage();
+    return `
     <tr>
+      <td>${canDel ? `<input type="checkbox" class="row-check-income" data-id="${x.id}" ${selectedIds.income.has(x.id)?'checked':''} onchange="toggleSelectOne('income','${x.id}',this.checked)">` : ''}</td>
       <td>${x.hinh_anh_url ? `<img src="${x.hinh_anh_url}" class="thumb" onclick="showImage('${x.hinh_anh_url}')">` : '—'}</td>
       <td><span class="tag green">${typeLabelOf(x.loai)}</span></td>
       <td>${x.mo_ta||'—'}</td>
       <td class="num" style="color:var(--green);font-weight:700">${fmtVND(x.so_tien)}</td>
       <td>${x.thang}</td>
       <td>${memberName(x.nguoi_tao)}</td>
-      <td>${canManage() ? `<button class="btn btn-sm btn-danger" onclick="deleteIncome('${x.id}')">Xóa</button>` : ''}</td>
-    </tr>`).join('');
+      <td>${canDel ? `<button class="btn btn-sm btn-danger" onclick="deleteIncome('${x.id}')">Xóa</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+  updateBulkBar('income');
 }
 function openIncomeModal(){
   document.getElementById('income-id').value='';
@@ -511,11 +539,12 @@ async function saveIncome(){
   toast('Đã thêm khoản thu');
 }
 async function deleteIncome(id){
-  if(!confirm('Xóa khoản thu này?')) return;
-  await sb.from('income').delete().eq('id', id);
-  await logActivity('xoa','income', id, 'Xóa một khoản thu');
-  await loadIncome(); renderIncome(); renderDashboard(); renderReports();
-  toast('Đã xóa khoản thu');
+  showConfirm('Xóa khoản thu này?', async ()=>{
+    await sb.from('income').delete().eq('id', id);
+    await logActivity('xoa','income', id, 'Xóa một khoản thu');
+    await loadIncome(); renderIncome(); renderDashboard(); renderReports();
+    toast('Đã xóa khoản thu');
+  });
 }
 
 // ============================================================
@@ -526,18 +555,27 @@ function renderExpenses(){
   const typeF = document.getElementById('expense-filter-type').value;
   let rows = expenseList.filter(x=>(!monthF||x.thang===monthF)&&(!typeF||x.loai===typeF));
   const tbody = document.getElementById('expenses-tbody');
-  if(!rows.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty">Không có khoản chi nào.</td></tr>'; return; }
-  tbody.innerHTML = rows.map(x=>`
+  const rowIds = new Set(rows.map(x=>x.id));
+  selectedIds.expense.forEach(id=>{ if(!rowIds.has(id)) selectedIds.expense.delete(id); });
+  if(!rows.length){ tbody.innerHTML = '<tr><td colspan="8" class="empty">Không có khoản chi nào.</td></tr>'; updateBulkBar('expense'); return; }
+  tbody.innerHTML = rows.map(x=>{
+    const canDel = canManage() || x.nguoi_tao===currentUser.id;
+    return `
     <tr>
+      <td>${canDel ? `<input type="checkbox" class="row-check-expense" data-id="${x.id}" ${selectedIds.expense.has(x.id)?'checked':''} onchange="toggleSelectOne('expense','${x.id}',this.checked)">` : ''}</td>
       <td>${x.hinh_anh_url ? `<img src="${x.hinh_anh_url}" class="thumb" onclick="showImage('${x.hinh_anh_url}')">` : '—'}</td>
       <td><span class="tag red">${typeLabelOf(x.loai)}</span></td>
       <td>${x.mo_ta||'—'}</td>
       <td class="num" style="color:var(--red);font-weight:700">${fmtVND(x.so_tien)}</td>
       <td>${x.thang}</td>
       <td>${memberName(x.nguoi_tao)}</td>
-      <td>${canManage() ? `<button class="btn btn-sm" onclick="quickSplitFromExpense('${x.id}')">Chia</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteExpense('${x.id}')">Xóa</button>` : ''}</td>
-    </tr>`).join('');
+      <td>
+        ${canManage() ? `<button class="btn btn-sm" onclick="quickSplitFromExpense('${x.id}')">Chia</button>` : ''}
+        ${canDel ? `<button class="btn btn-sm btn-danger" onclick="deleteExpense('${x.id}')">Xóa</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+  updateBulkBar('expense');
 }
 function openExpenseModal(){
   document.getElementById('expense-id').value='';
@@ -576,11 +614,56 @@ async function saveExpense(){
   toast('Đã thêm khoản chi');
 }
 async function deleteExpense(id){
-  if(!confirm('Xóa khoản chi này?')) return;
-  await sb.from('expenses').delete().eq('id', id);
-  await logActivity('xoa','expenses', id, 'Xóa một khoản chi');
-  await loadExpenses(); renderExpenses(); renderDashboard(); renderReports();
-  toast('Đã xóa khoản chi');
+  showConfirm('Xóa khoản chi này?', async ()=>{
+    await sb.from('expenses').delete().eq('id', id);
+    await logActivity('xoa','expenses', id, 'Xóa một khoản chi');
+    await loadExpenses(); renderExpenses(); renderDashboard(); renderReports();
+    toast('Đã xóa khoản chi');
+  });
+}
+
+// ============================================================
+// CHỌN NHIỀU / XÓA HÀNG LOẠT (khoản thu & khoản chi)
+// ============================================================
+function toggleSelectOne(kind, id, checked){
+  if(checked) selectedIds[kind].add(id); else selectedIds[kind].delete(id);
+  updateBulkBar(kind);
+}
+function toggleSelectAll(kind, checked){
+  const boxes = document.querySelectorAll('.row-check-'+kind);
+  boxes.forEach(b=>{
+    b.checked = checked;
+    if(checked) selectedIds[kind].add(b.dataset.id); else selectedIds[kind].delete(b.dataset.id);
+  });
+  updateBulkBar(kind);
+}
+function updateBulkBar(kind){
+  const n = selectedIds[kind].size;
+  const btn = document.getElementById('btn-bulk-delete-'+kind);
+  const countEl = document.getElementById('bulk-count-'+kind);
+  if(countEl) countEl.textContent = n;
+  if(btn) btn.classList.toggle('hidden', n===0);
+  const selectAll = document.getElementById(kind+'-select-all');
+  const boxes = document.querySelectorAll('.row-check-'+kind);
+  if(selectAll) selectAll.checked = boxes.length>0 && n===boxes.length;
+}
+async function bulkDelete(kind){
+  const ids = Array.from(selectedIds[kind]);
+  if(!ids.length) return;
+  const conf = {
+    income:   {table:'income',         label:'khoản thu'},
+    expense:  {table:'expenses',       label:'khoản chi'},
+    activity: {table:'activity_log',  label:'dòng nhật ký'},
+  }[kind];
+  showConfirm(`Xóa ${ids.length} ${conf.label} đã chọn? Không thể hoàn tác.`, async ()=>{
+    await sb.from(conf.table).delete().in('id', ids);
+    selectedIds[kind].clear();
+    if(kind==='income'){ await loadIncome(); renderIncome(); renderDashboard(); renderReports(); }
+    else if(kind==='expense'){ await loadExpenses(); renderExpenses(); renderDashboard(); renderReports(); }
+    else if(kind==='activity'){ activityList = activityList.filter(x=>!ids.includes(x.id)); renderActivity(); }
+    if(kind!=='activity') await logActivity('xoa', conf.table, null, `Xóa hàng loạt ${ids.length} ${conf.label}`);
+    toast(`Đã xóa ${ids.length} ${conf.label}`);
+  });
 }
 function quickSplitFromExpense(id){
   const ex = expenseList.find(x=>x.id===id);
@@ -793,11 +876,12 @@ function renderNotifications(){
     </tr>`).join('') + '</tbody></table>';
 }
 async function deleteNotif(id){
-  if(!confirm('Xóa thông báo này?')) return;
-  await sb.from('notifications').delete().eq('id', id);
-  await logActivity('xoa','notifications', id, 'Xóa một thông báo');
-  await loadNotifications(); renderNotifications(); renderDashboard();
-  toast('Đã xóa thông báo');
+  showConfirm('Xóa thông báo này?', async ()=>{
+    await sb.from('notifications').delete().eq('id', id);
+    await logActivity('xoa','notifications', id, 'Xóa một thông báo');
+    await loadNotifications(); renderNotifications(); renderDashboard();
+    toast('Đã xóa thông báo');
+  });
 }
 function openNotifModal(){
   document.getElementById('notif-type').value='chung';
@@ -822,21 +906,40 @@ async function saveNotif(){
 // ============================================================
 function renderActivity(){
   const tbody = document.getElementById('activity-tbody');
-  if(!activityList.length){ tbody.innerHTML = '<tr><td colspan="5" class="empty">Chưa có hoạt động nào.</td></tr>'; return; }
+  const rowIds = new Set(activityList.map(a=>a.id));
+  selectedIds.activity.forEach(id=>{ if(!rowIds.has(id)) selectedIds.activity.delete(id); });
+  if(!activityList.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty">Chưa có hoạt động nào.</td></tr>'; updateBulkBar('activity'); return; }
   const actLabel = {them:'Thêm', sua:'Sửa', xoa:'Xóa', thanh_toan:'Thanh toán'};
+  const bangLabel = {
+    notifications:'Thông báo', cleaning_schedule:'Lịch vệ sinh', expenses:'Khoản chi',
+    income:'Khoản thu', splits:'Chia chi phí', split_details:'Chi tiết chia',
+    payments:'Thanh toán', monthly_dues:'Quỹ tháng', profiles:'Thành viên', rooms:'Phòng'
+  };
+  const canDel = canManage();
   tbody.innerHTML = activityList.map(a=>{
     const actor = memberName(a.nguoi_thuc_hien);
     const rawDesc = a.mo_ta||'';
     // Replace email addresses in description with actual member name
     const cleanDesc = actor !== '—' ? rawDesc.replace(/[\w.-]+@[\w.-]+\.[a-z]{2,}/gi, actor) : rawDesc;
     return `<tr>
+      <td>${canDel ? `<input type="checkbox" class="row-check-activity" data-id="${a.id}" ${selectedIds.activity.has(a.id)?'checked':''} onchange="toggleSelectOne('activity','${a.id}',this.checked)">` : ''}</td>
       <td style="white-space:nowrap">${new Date(a.created_at).toLocaleString('vi-VN')}</td>
       <td><span class="tag gray">${actLabel[a.hanh_dong]||a.hanh_dong}</span></td>
-      <td>${a.bang}</td>
+      <td>${bangLabel[a.bang]||a.bang}</td>
       <td>${cleanDesc}</td>
       <td><span class="member-avatar" style="font-size:10px">${actor.charAt(0).toUpperCase()}</span>${actor}</td>
+      <td>${canDel ? `<button class="btn btn-sm btn-danger" onclick="deleteActivity('${a.id}')">Xóa</button>` : ''}</td>
     </tr>`;
   }).join('');
+  updateBulkBar('activity');
+}
+async function deleteActivity(id){
+  showConfirm('Xóa dòng nhật ký này?', async ()=>{
+    await sb.from('activity_log').delete().eq('id', id);
+    activityList = activityList.filter(x=>x.id!==id);
+    renderActivity();
+    toast('Đã xóa dòng nhật ký');
+  });
 }
 
 // ============================================================
@@ -1064,11 +1167,12 @@ async function markCleaningDone(id, dateStr){
 }
 
 async function deleteCleaning(id, dateStr){
-  if(!confirm('H\u1ee7y \u0111\u0103ng k\u00fd v\u1ec7 sinh ng\u00e0y '+dateStr+'?')) return;
-  await sb.from('cleaning_schedule').delete().eq('id',id);
-  await logActivity('xoa','cleaning_schedule',id,'H\u1ee7y \u0111\u0103ng k\u00fd v\u1ec7 sinh ng\u00e0y '+dateStr);
-  await loadCleaning(); renderCleaning();
-  toast('\u0110\u00e3 h\u1ee7y \u0111\u0103ng k\u00fd v\u1ec7 sinh');
+  showConfirm('Hủy đăng ký vệ sinh ngày '+dateStr+'?', async ()=>{
+    await sb.from('cleaning_schedule').delete().eq('id',id);
+    await logActivity('xoa','cleaning_schedule',id,'Hủy đăng ký vệ sinh ngày '+dateStr);
+    await loadCleaning(); renderCleaning();
+    toast('Đã hủy đăng ký vệ sinh');
+  });
 }
 
 // ============================================================
