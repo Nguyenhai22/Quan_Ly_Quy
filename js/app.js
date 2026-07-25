@@ -3,6 +3,7 @@
 // ============================================================
 let currentUser = null;   // auth user
 let myProfile = null;     // profiles row
+let myRoom = null;        // rooms row (phòng hiện tại)
 let members = [];
 let incomeList = [];
 let expenseList = [];
@@ -109,21 +110,108 @@ async function doLogin(){
 
 async function doLogout(){
   await sb.auth.signOut();
-  currentUser = null; myProfile = null;
+  currentUser = null; myProfile = null; myRoom = null;
   document.getElementById('app').classList.add('hidden');
+  document.getElementById('room-gate-screen').classList.add('hidden');
   document.getElementById('auth-screen').classList.remove('hidden');
 }
 
 async function bootAfterLogin(user){
   currentUser = user;
-  let {data: profile} = await sb.from('profiles').select('*').eq('id', user.id).single();
+  let {data: profile, error: profErr} = await sb.from('profiles').select('*').eq('id', user.id).single();
+  if(profErr && profErr.code !== 'PGRST116'){
+    // PGRST116 = không tìm thấy dòng nào (bình thường với user mới) — các lỗi khác thì báo rõ, không crash
+    alert('Lỗi tải hồ sơ: '+profErr.message+'\n\nHãy kiểm tra lại RLS policy trên bảng profiles trong Supabase.');
+    return;
+  }
   if(!profile){
     // fallback: create profile if missing (e.g. first admin)
     const insertRes = await sb.from('profiles').insert({id:user.id, full_name:user.email, email:user.email, role:'thanh_vien'}).select().single();
+    if(insertRes.error){ alert('Lỗi tạo hồ sơ: '+insertRes.error.message); return; }
     profile = insertRes.data;
   }
   myProfile = profile;
   document.getElementById('auth-screen').classList.add('hidden');
+
+  if(!myProfile.room_id){
+    showRoomGate();
+    return;
+  }
+  const {data: room} = await sb.from('rooms').select('*').eq('id', myProfile.room_id).maybeSingle();
+  myRoom = room || null;
+  await enterApp();
+}
+
+// ============================================================
+// ROOM GATE (chọn/tạo phòng trước khi vào quỹ)
+// ============================================================
+function showRoomGate(){
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('room-gate-username').textContent = myProfile.full_name || myProfile.email || 'bạn';
+  document.getElementById('room-gate-screen').classList.remove('hidden');
+  document.getElementById('room-create-name').value = '';
+  document.getElementById('room-create-code').value = '';
+  document.getElementById('room-join-code').value = '';
+  document.getElementById('room-gate-error').classList.add('hidden');
+  toggleRoomTab('create');
+}
+function toggleRoomTab(which){
+  document.getElementById('room-tab-create').className = 'btn'+(which==='create'?' btn-primary':'');
+  document.getElementById('room-tab-join').className = 'btn'+(which==='join'?' btn-primary':'');
+  document.getElementById('room-create-form').classList.toggle('hidden', which!=='create');
+  document.getElementById('room-join-form').classList.toggle('hidden', which!=='join');
+  document.getElementById('room-gate-error').classList.add('hidden');
+}
+async function createRoom(){
+  const errEl = document.getElementById('room-gate-error');
+  errEl.classList.add('hidden');
+  const name = document.getElementById('room-create-name').value.trim();
+  const code = document.getElementById('room-create-code').value.trim().toUpperCase();
+  if(!name || !code){
+    errEl.textContent = 'Vui lòng nhập đủ tên phòng và mã phòng.';
+    errEl.classList.remove('hidden'); return;
+  }
+  const {data: room, error} = await sb.from('rooms').insert({ten_phong:name, ma_phong:code, truong_phong_id: currentUser.id}).select().single();
+  if(error){
+    errEl.textContent = /duplicate|unique/i.test(error.message) ? 'Mã phòng này đã có người dùng, hãy chọn mã khác.' : 'Lỗi: '+error.message;
+    errEl.classList.remove('hidden'); return;
+  }
+  const {error: upErr} = await sb.from('profiles').update({room_id: room.id, role:'truong_phong'}).eq('id', currentUser.id);
+  if(upErr){ errEl.textContent = 'Lỗi cập nhật hồ sơ: '+upErr.message; errEl.classList.remove('hidden'); return; }
+  myProfile.room_id = room.id; myProfile.role = 'truong_phong'; myRoom = room;
+  document.getElementById('room-gate-screen').classList.add('hidden');
+  await enterApp();
+  toast('🎉 Đã tạo phòng "'+room.ten_phong+'"! Hãy chia sẻ mã "'+room.ma_phong+'" cho các thành viên.');
+}
+async function joinRoom(){
+  const errEl = document.getElementById('room-gate-error');
+  errEl.classList.add('hidden');
+  const code = document.getElementById('room-join-code').value.trim().toUpperCase();
+  if(!code){ errEl.textContent = 'Vui lòng nhập mã phòng.'; errEl.classList.remove('hidden'); return; }
+  const {data: room, error} = await sb.from('rooms').select('*').eq('ma_phong', code).maybeSingle();
+  if(error || !room){ errEl.textContent = 'Không tìm thấy phòng với mã này.'; errEl.classList.remove('hidden'); return; }
+  const {error: upErr} = await sb.from('profiles').update({room_id: room.id}).eq('id', currentUser.id);
+  if(upErr){ errEl.textContent = 'Lỗi tham gia phòng: '+upErr.message; errEl.classList.remove('hidden'); return; }
+  myProfile.room_id = room.id; myRoom = room;
+  document.getElementById('room-gate-screen').classList.add('hidden');
+  await enterApp();
+  toast('✅ Đã tham gia phòng "'+room.ten_phong+'"!');
+}
+async function updateRoom(){
+  if(!myRoom || myProfile.role!=='truong_phong'){ toast('Chỉ Trưởng phòng mới đổi được mã phòng','err'); return; }
+  const name = document.getElementById('room-manage-name').value.trim();
+  const code = document.getElementById('room-manage-code').value.trim().toUpperCase();
+  if(!name || !code){ toast('Vui lòng nhập đủ tên phòng và mã phòng','err'); return; }
+  const {error} = await sb.from('rooms').update({ten_phong:name, ma_phong:code}).eq('id', myRoom.id);
+  if(error){ toast(/duplicate|unique/i.test(error.message)?'Mã phòng này đã được dùng, chọn mã khác.':'Lỗi: '+error.message, 'err'); return; }
+  myRoom.ten_phong = name; myRoom.ma_phong = code;
+  const brandEl = document.getElementById('sidebar-room-name');
+  if(brandEl) brandEl.textContent = name;
+  toast('Đã cập nhật thông tin phòng');
+}
+
+async function enterApp(){
+  document.getElementById('room-gate-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   const displayName = myProfile.full_name || myProfile.email;
   document.getElementById('foot-username').textContent = displayName;
@@ -136,6 +224,8 @@ async function bootAfterLogin(user){
   if(footAvatar) footAvatar.textContent = displayName.trim().charAt(0).toUpperCase();
   const footRole = document.getElementById('foot-role');
   if(footRole) footRole.textContent = ROLE_LABEL[myProfile.role] || 'Thành viên';
+  const brandEl = document.getElementById('sidebar-room-name');
+  if(brandEl) brandEl.textContent = myRoom ? myRoom.ten_phong : 'Quỹ Phòng';
   buildNav();
   applyRoleVisibility();
   await loadAll();
@@ -193,44 +283,44 @@ async function loadAll(){
 }
 
 async function loadMonthlyDues(){
-  const {data} = await sb.from('monthly_dues').select('*').order('thang', {ascending:false});
+  const {data} = await sb.from('monthly_dues').select('*').eq('room_id', myProfile.room_id).order('thang', {ascending:false});
   duesList = data || [];
 }
 
 async function loadMembers(){
-  const {data} = await sb.from('profiles').select('*').order('created_at');
+  const {data} = await sb.from('profiles').select('*').eq('room_id', myProfile.room_id).order('created_at');
   members = data || [];
 }
 async function loadIncome(){
-  const {data, error} = await sb.from('income').select('*').order('created_at', {ascending:false});
+  const {data, error} = await sb.from('income').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false});
   if(error){ toast('Không tải được khoản thu: '+error.message, 'err'); }
   incomeList = data || [];
 }
 async function loadExpenses(){
-  const {data, error} = await sb.from('expenses').select('*').order('created_at', {ascending:false});
+  const {data, error} = await sb.from('expenses').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false});
   if(error){ toast('Không tải được khoản chi: '+error.message, 'err'); }
   expenseList = data || [];
 }
 async function loadSplits(){
-  const {data: s} = await sb.from('splits').select('*').order('created_at', {ascending:false});
+  const {data: s} = await sb.from('splits').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false});
   splitList = s || [];
-  const {data: d} = await sb.from('split_details').select('*');
+  const {data: d} = await sb.from('split_details').select('*').eq('room_id', myProfile.room_id);
   splitDetails = d || [];
 }
 async function loadPayments(){
-  const {data} = await sb.from('payments').select('*').order('paid_at', {ascending:false});
+  const {data} = await sb.from('payments').select('*').eq('room_id', myProfile.room_id).order('paid_at', {ascending:false});
   paymentList = data || [];
 }
 async function loadNotifications(){
-  const {data} = await sb.from('notifications').select('*').order('created_at', {ascending:false});
+  const {data} = await sb.from('notifications').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false});
   notifList = data || [];
 }
 async function loadActivity(){
-  const {data} = await sb.from('activity_log').select('*').order('created_at', {ascending:false}).limit(200);
+  const {data} = await sb.from('activity_log').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false}).limit(200);
   activityList = data || [];
 }
 async function logActivity(hanh_dong, bang, record_id, mo_ta){
-  await sb.from('activity_log').insert({hanh_dong, bang, record_id, mo_ta, nguoi_thuc_hien: currentUser.id});
+  await sb.from('activity_log').insert({hanh_dong, bang, record_id, mo_ta, nguoi_thuc_hien: currentUser.id, room_id: myProfile.room_id});
   await loadActivity(); renderActivity();
 }
 function memberName(id){ const m = members.find(x=>x.id===id); return m ? (m.full_name || m.email || '—') : '—'; }
@@ -410,6 +500,7 @@ async function saveIncome(){
     mo_ta: document.getElementById('income-desc').value.trim(),
     thang: document.getElementById('income-month').value || currentMonthStr(),
     nguoi_tao: currentUser.id,
+    room_id: myProfile.room_id,
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
   const {error} = await sb.from('income').insert(payload);
@@ -474,6 +565,7 @@ async function saveExpense(){
     mo_ta: document.getElementById('expense-desc').value.trim(),
     thang: document.getElementById('expense-month').value || currentMonthStr(),
     nguoi_tao: currentUser.id,
+    room_id: myProfile.room_id,
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
   const {error} = await sb.from('expenses').insert(payload);
@@ -559,12 +651,13 @@ async function saveSplit(){
   const details = Array.from(inputs).map(i=>({member_id:i.dataset.id, so_tien: Number(i.value)||0}));
 
   const {data: splitRow, error} = await sb.from('splits').insert({
-    ten:name, tong_tien: total, phuong_thuc: method, month, thang: month,
-    expense_id: splitSourceExpense ? splitSourceExpense.id : null, nguoi_tao: currentUser.id
+    ten:name, tong_tien: total, phuong_thuc: method, thang: month,
+    expense_id: splitSourceExpense ? splitSourceExpense.id : null, nguoi_tao: currentUser.id,
+    room_id: myProfile.room_id
   }).select().single();
   if(error){ toast('Lỗi tạo phiếu chia: '+error.message,'err'); return; }
 
-  const rows = details.map(d=>({split_id: splitRow.id, member_id: d.member_id, so_tien: d.so_tien}));
+  const rows = details.map(d=>({split_id: splitRow.id, member_id: d.member_id, so_tien: d.so_tien, room_id: myProfile.room_id}));
   await sb.from('split_details').insert(rows);
   await logActivity('them','splits', splitRow.id, `Tạo phiếu chia "${name}" (${fmtVND(total)})`);
   closeModal('modal-split');
@@ -605,7 +698,7 @@ async function setMonthlyDueAmount(){
     if(existing){
       await sb.from('monthly_dues').update({so_tien: amount}).eq('id', existing.id);
     } else {
-      await sb.from('monthly_dues').insert({member_id: m.id, thang: month, so_tien: amount, da_nop:false});
+      await sb.from('monthly_dues').insert({member_id: m.id, thang: month, so_tien: amount, da_nop:false, room_id: myProfile.room_id});
     }
   }
   await logActivity('them','monthly_dues', null, `Đặt mức quỹ chung ${fmtVND(amount)}/người cho tháng ${month}`);
@@ -677,7 +770,7 @@ async function markPaid(detailId){
   const detail = splitDetails.find(d=>d.id===detailId);
   if(!detail) return;
   await sb.from('split_details').update({da_thanh_toan:true}).eq('id', detailId);
-  await sb.from('payments').insert({member_id: detail.member_id, split_detail_id: detailId, so_tien: detail.so_tien, trang_thai:'da_thanh_toan', nguoi_xac_nhan: currentUser.id});
+  await sb.from('payments').insert({member_id: detail.member_id, split_detail_id: detailId, so_tien: detail.so_tien, trang_thai:'da_thanh_toan', nguoi_xac_nhan: currentUser.id, room_id: myProfile.room_id});
   await logActivity('thanh_toan','payments', detailId, `${memberName(detail.member_id)} đã thanh toán ${fmtVND(detail.so_tien)}`);
   await loadSplits(); await loadPayments(); renderPayments(); renderDashboard(); renderReports();
   toast('Đã ghi nhận thanh toán');
@@ -690,12 +783,21 @@ function renderNotifications(){
   const wrap = document.getElementById('notif-list');
   if(!notifList.length){ wrap.innerHTML = '<div class="empty">Chưa có thông báo nào.</div>'; return; }
   const typeLabel = {nhac_dong_tien:'Nhắc đóng tiền', thu_moi:'Khoản thu mới', chi_moi:'Khoản chi mới', hop_phong:'Họp phòng', chung:'Chung'};
+  const canDel = canManage();
   wrap.innerHTML = '<table><tbody>' + notifList.map(n=>`
     <tr>
       <td style="width:110px"><span class="tag amber">${typeLabel[n.loai]}</span></td>
       <td><b>${n.tieu_de}</b><br><span style="color:var(--muted);font-size:12.5px">${n.noi_dung||''}</span></td>
       <td style="white-space:nowrap;color:var(--muted);font-size:12px">${new Date(n.created_at).toLocaleString('vi-VN')}</td>
+      <td>${canDel ? `<button class="btn btn-sm btn-danger" onclick="deleteNotif('${n.id}')">Xóa</button>` : ''}</td>
     </tr>`).join('') + '</tbody></table>';
+}
+async function deleteNotif(id){
+  if(!confirm('Xóa thông báo này?')) return;
+  await sb.from('notifications').delete().eq('id', id);
+  await logActivity('xoa','notifications', id, 'Xóa một thông báo');
+  await loadNotifications(); renderNotifications(); renderDashboard();
+  toast('Đã xóa thông báo');
 }
 function openNotifModal(){
   document.getElementById('notif-type').value='chung';
@@ -708,7 +810,7 @@ async function saveNotif(){
   if(!title){ toast('Vui lòng nhập tiêu đề','err'); return; }
   await sb.from('notifications').insert({
     tieu_de:title, noi_dung: document.getElementById('notif-content').value.trim(),
-    loai: document.getElementById('notif-type').value, nguoi_tao: currentUser.id
+    loai: document.getElementById('notif-type').value, nguoi_tao: currentUser.id, room_id: myProfile.room_id
   });
   closeModal('modal-notif');
   await loadNotifications(); renderNotifications(); renderDashboard();
@@ -824,7 +926,7 @@ function renderStatistics(){
 // LỊCH VỆ SINH
 // ============================================================
 async function loadCleaning(){
-  const {data} = await sb.from('cleaning_schedule').select('*').order('ngay');
+  const {data} = await sb.from('cleaning_schedule').select('*').eq('room_id', myProfile.room_id).order('ngay');
   cleaningList = data || [];
 }
 
@@ -945,7 +1047,7 @@ async function saveCleaning(){
   if(existing){ toast('B\u1ea1n \u0111\u00e3 \u0111\u0103ng k\u00fd v\u1ec7 sinh ng\u00e0y n\u00e0y r\u1ed3i!','err'); return; }
   const {error} = await sb.from('cleaning_schedule').insert({
     ngay:date, member_id:myProfile.id, ca, ghi_chu:note,
-    trang_thai:'chua_lam', nguoi_tao:currentUser.id
+    trang_thai:'chua_lam', nguoi_tao:currentUser.id, room_id: myProfile.room_id
   });
   if(error){ toast('L\u1ed7i: '+error.message,'err'); return; }
   await logActivity('them','cleaning_schedule',null,`${memberName(myProfile.id)} \u0111\u0103ng k\u00fd v\u1ec7 sinh ng\u00e0y ${date}`);
@@ -975,6 +1077,15 @@ async function deleteCleaning(id, dateStr){
 function fillAccountForm(){
   document.getElementById('acc-name').value = myProfile.full_name || '';
   document.getElementById('acc-phone').value = myProfile.phone || '';
+  const roomWrap = document.getElementById('room-manage-card-wrap');
+  if(roomWrap){
+    const isLeader = myProfile.role==='truong_phong';
+    roomWrap.style.display = isLeader ? '' : 'none';
+    if(isLeader && myRoom){
+      document.getElementById('room-manage-name').value = myRoom.ten_phong || '';
+      document.getElementById('room-manage-code').value = myRoom.ma_phong || '';
+    }
+  }
 }
 async function updateProfile(){
   const name = document.getElementById('acc-name').value.trim();
