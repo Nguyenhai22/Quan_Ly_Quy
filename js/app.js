@@ -237,11 +237,13 @@ async function enterApp(){
   document.getElementById('foot-username').textContent = displayName;
   document.getElementById('role-badge').textContent = ROLE_LABEL[myProfile.role] || 'Thành viên';
   document.getElementById('user-avatar').textContent = displayName.trim().charAt(0).toUpperCase();
+  applyAvatar(document.getElementById('user-avatar'), displayName, myProfile.avatar_url);
   const nameEl = document.getElementById('topbar-username');
   if(nameEl) nameEl.textContent = displayName;
   // Sidebar footer
   const footAvatar = document.getElementById('foot-avatar-letter');
   if(footAvatar) footAvatar.textContent = displayName.trim().charAt(0).toUpperCase();
+  applyAvatar(footAvatar, displayName, myProfile.avatar_url);
   const footRole = document.getElementById('foot-role');
   if(footRole) footRole.textContent = ROLE_LABEL[myProfile.role] || 'Thành viên';
   const brandEl = document.getElementById('sidebar-room-name');
@@ -387,7 +389,7 @@ function renderMembers(){
   if(!members.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty">Chưa có thành viên nào.</td></tr>'; return; }
   tbody.innerHTML = members.map(m=>`
     <tr>
-      <td><span class="member-avatar">${(m.full_name||'?').charAt(0).toUpperCase()}</span>${m.full_name}</td>
+      <td>${avatarSpanHtml(m.full_name, m.avatar_url, 'member-avatar')}${m.full_name}</td>
       <td>${m.phone||'—'}</td>
       <td><span class="tag ${m.role==='truong_phong'?'amber':m.role==='thu_quy'?'green':'gray'}">${ROLE_LABEL[m.role]}</span></td>
       <td>${m.join_date||'—'}</td>
@@ -1190,9 +1192,28 @@ async function deleteCleaning(id, dateStr){
 // ============================================================
 // ACCOUNT
 // ============================================================
+function applyAvatar(el, name, avatarUrl){
+  if(!el) return;
+  if(avatarUrl){
+    el.style.backgroundImage = `url('${avatarUrl}')`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.textContent = '';
+  } else {
+    el.style.backgroundImage = '';
+    el.textContent = (name||'?').trim().charAt(0).toUpperCase();
+  }
+}
+function avatarSpanHtml(name, avatarUrl, className){
+  const letter = (name||'?').trim().charAt(0).toUpperCase();
+  if(avatarUrl) return `<span class="${className}" style="background-image:url('${avatarUrl}');background-size:cover;background-position:center;color:transparent"></span>`;
+  return `<span class="${className}">${letter}</span>`;
+}
 function fillAccountForm(){
   document.getElementById('acc-name').value = myProfile.full_name || '';
   document.getElementById('acc-phone').value = myProfile.phone || '';
+  document.getElementById('acc-avatar-input').value = '';
+  applyAvatar(document.getElementById('acc-avatar-preview'), myProfile.full_name, myProfile.avatar_url);
   const roomWrap = document.getElementById('room-manage-card-wrap');
   if(roomWrap){
     const isLeader = myProfile.role==='truong_phong';
@@ -1203,18 +1224,40 @@ function fillAccountForm(){
     }
   }
 }
+function previewAccountAvatar(){
+  const input = document.getElementById('acc-avatar-input');
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const el = document.getElementById('acc-avatar-preview');
+    el.style.backgroundImage = `url('${e.target.result}')`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.textContent = '';
+  };
+  reader.readAsDataURL(file);
+}
 async function updateProfile(){
   const name = document.getElementById('acc-name').value.trim();
   const phone = document.getElementById('acc-phone').value.trim();
   if(!name){ toast('Vui lòng nhập họ tên','err'); return; }
-  await sb.from('profiles').update({full_name:name, phone}).eq('id', currentUser.id);
-  myProfile.full_name = name; myProfile.phone = phone;
+  const payload = {full_name:name, phone};
+  const avatarInput = document.getElementById('acc-avatar-input');
+  if(avatarInput.files[0]){
+    const url = await uploadReceipt(avatarInput, 'avatars');
+    if(url) payload.avatar_url = url;
+  }
+  const {error} = await sb.from('profiles').update(payload).eq('id', currentUser.id);
+  if(error){ toast('Lỗi: '+error.message, 'err'); return; }
+  Object.assign(myProfile, payload);
   document.getElementById('foot-username').textContent = name;
-  document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
+  applyAvatar(document.getElementById('user-avatar'), name, myProfile.avatar_url);
   const nameEl = document.getElementById('topbar-username');
   if(nameEl) nameEl.textContent = name;
-  const footAvatar = document.getElementById('foot-avatar-letter');
-  if(footAvatar) footAvatar.textContent = name.charAt(0).toUpperCase();
+  applyAvatar(document.getElementById('foot-avatar-letter'), name, myProfile.avatar_url);
+  avatarInput.value = '';
+  await loadMembers(); renderMembers();
   await loadMembers(); renderMembers();
   toast('Đã cập nhật thông tin cá nhân');
 }
