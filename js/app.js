@@ -394,7 +394,8 @@ function renderMembers(){
       <td>${m.leave_date||'—'}</td>
       <td><span class="tag ${m.status==='active'?'green':'red'}">${m.status==='active'?'Đang ở':'Đã rời'}</span></td>
       <td>${canManage() ? `<button class="btn btn-sm" onclick='openMemberModal(${JSON.stringify(m)})'>Sửa</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteMember('${m.id}')">Xóa</button>` : ''}</td>
+        <button class="btn btn-sm btn-danger" onclick="deleteMember('${m.id}')">Đánh dấu rời</button>` : ''}
+        ${(myProfile.role==='truong_phong' && m.id!==currentUser.id) ? `<button class="btn btn-sm btn-danger" onclick="removeMemberFromRoom('${m.id}','${(m.full_name||'').replace(/'/g,"\\'")}')">Xóa khỏi phòng</button>` : ''}</td>
     </tr>`).join('');
 }
 function openMemberModal(m){
@@ -431,12 +432,23 @@ async function saveMember(){
   toast('Đã lưu thành viên');
 }
 async function deleteMember(id){
-  showConfirm('Xóa thành viên này khỏi danh sách?', async ()=>{
+  showConfirm('Đánh dấu thành viên này đã rời phòng? (vẫn giữ lịch sử thu/chi cũ)', async ()=>{
     await sb.from('profiles').update({status:'inactive'}).eq('id', id);
     await logActivity('xoa','members', id, 'Đánh dấu thành viên đã rời phòng');
     await loadMembers(); renderMembers(); renderDashboard();
     toast('Đã cập nhật trạng thái thành viên');
   });
+}
+async function removeMemberFromRoom(id, name){
+  if(myProfile.role!=='truong_phong'){ toast('Chỉ Trưởng phòng mới xóa được thành viên khỏi phòng','err'); return; }
+  if(id===currentUser.id){ toast('Bạn không thể tự xóa mình khỏi phòng ở đây.','err'); return; }
+  showConfirm(`Xóa "${name}" khỏi phòng? Người này sẽ mất quyền xem dữ liệu phòng ngay lập tức và cần nhập lại mã phòng nếu muốn tham gia lại.`, async ()=>{
+    const {error} = await sb.from('profiles').update({room_id:null, role:'thanh_vien'}).eq('id', id);
+    if(error){ toast('Lỗi: '+error.message,'err'); return; }
+    await logActivity('xoa','members', id, `Xóa ${name} khỏi phòng`);
+    await loadMembers(); renderMembers(); renderDashboard();
+    toast(`Đã xóa "${name}" khỏi phòng`);
+  }, {title:'Xóa khỏi phòng'});
 }
 
 // ============================================================
