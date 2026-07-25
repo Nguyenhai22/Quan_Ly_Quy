@@ -57,7 +57,7 @@
       <div class="field"><label>Mã phòng</label><input type="text" id="room-join-code" autocomplete="off" placeholder="Nhập mã phòng được chia sẻ"></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="joinRoom()">Tham gia phòng</button>
     </div>
-    <div class="auth-toggle"><a onclick="doLogout()">Đăng xuất</a></div>
+    <div class="auth-toggle"><a onclick="askLogout()">Đăng xuất</a></div>
   </div>
 </div>
 
@@ -88,7 +88,7 @@
         <span class="role-badge" id="role-badge">—</span>
         <span class="topbar-name" id="topbar-username">—</span>
         <div class="av" id="user-avatar">?</div>
-        <button class="btn btn-ghost btn-sm" onclick="doLogout()">Đăng xuất</button>
+        <button class="btn btn-ghost btn-sm" onclick="askLogout()">Đăng xuất</button>
       </div>
     </div>
 
@@ -136,11 +136,12 @@
             <option value="quy_an_uong">Quỹ ăn uống</option>
             <option value="thu_khac">Khoản thu khác</option>
           </select>
+          <button class="btn btn-danger btn-sm hidden" id="btn-bulk-delete-income" onclick="bulkDelete('income')">🗑 Xóa đã chọn (<span id="bulk-count-income">0</span>)</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Ảnh</th><th>Loại</th><th>Mô tả</th><th>Số tiền</th><th>Tháng</th><th>Người tạo</th><th></th></tr></thead>
-            <tbody id="income-tbody"><tr><td colspan="7" class="empty">Đang tải…</td></tr></tbody>
+            <thead><tr><th style="width:32px"><input type="checkbox" id="income-select-all" onchange="toggleSelectAll('income', this.checked)"></th><th>Ảnh</th><th>Loại</th><th>Mô tả</th><th>Số tiền</th><th>Tháng</th><th>Người tạo</th><th></th></tr></thead>
+            <tbody id="income-tbody"><tr><td colspan="8" class="empty">Đang tải…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -165,11 +166,12 @@
             <option value="sinh_hoat">Tiền sinh hoạt</option>
             <option value="phat_sinh">Chi phát sinh</option>
           </select>
+          <button class="btn btn-danger btn-sm hidden" id="btn-bulk-delete-expense" onclick="bulkDelete('expense')">🗑 Xóa đã chọn (<span id="bulk-count-expense">0</span>)</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Ảnh</th><th>Loại</th><th>Mô tả</th><th>Số tiền</th><th>Tháng</th><th>Người tạo</th><th></th></tr></thead>
-            <tbody id="expenses-tbody"><tr><td colspan="7" class="empty">Đang tải…</td></tr></tbody>
+            <thead><tr><th style="width:32px"><input type="checkbox" id="expense-select-all" onchange="toggleSelectAll('expense', this.checked)"></th><th>Ảnh</th><th>Loại</th><th>Mô tả</th><th>Số tiền</th><th>Tháng</th><th>Người tạo</th><th></th></tr></thead>
+            <tbody id="expenses-tbody"><tr><td colspan="8" class="empty">Đang tải…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -248,11 +250,13 @@
 
       <!-- ===== ACTIVITY LOG ===== -->
       <section class="page" id="page-activity">
-        <div class="section-title"><h2>Nhật ký hoạt động</h2></div>
+        <div class="section-title"><h2>Nhật ký hoạt động</h2>
+          <button class="btn btn-danger btn-sm hidden" id="btn-bulk-delete-activity" onclick="bulkDelete('activity')">🗑 Xóa đã chọn (<span id="bulk-count-activity">0</span>)</button>
+        </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Thời gian</th><th>Hành động</th><th>Bảng</th><th>Mô tả</th><th>Người thực hiện</th></tr></thead>
-            <tbody id="activity-tbody"><tr><td colspan="5" class="empty">Đang tải…</td></tr></tbody>
+            <thead><tr><th style="width:32px"><input type="checkbox" id="activity-select-all" onchange="toggleSelectAll('activity', this.checked)"></th><th>Thời gian</th><th>Hành động</th><th>Khu vực</th><th>Mô tả</th><th>Người thực hiện</th><th></th></tr></thead>
+            <tbody id="activity-tbody"><tr><td colspan="7" class="empty">Đang tải…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -485,6 +489,27 @@
     <div class="modal-foot">
       <button class="btn" onclick="closeModal('modal-cleaning')">Hủy</button>
       <button class="btn btn-primary" onclick="saveCleaning()">🧹 Đăng ký</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-confirm">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-head"><h3 id="confirm-title">Xác nhận</h3></div>
+    <p id="confirm-message" style="margin:0 0 20px;color:var(--ink-soft);font-size:14px;line-height:1.5"></p>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('modal-confirm')">Hủy</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Xác nhận</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-alert">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-head"><h3 id="alert-title">Thông báo</h3></div>
+    <div id="alert-message" style="margin:0 0 20px;color:var(--ink-soft);font-size:14px;line-height:1.6;white-space:pre-wrap"></div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" onclick="closeModal('modal-alert')">Đã hiểu</button>
     </div>
   </div>
 </div>
