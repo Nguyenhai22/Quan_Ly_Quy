@@ -37,10 +37,34 @@
   </div>
 </div>
 
+<!-- ================= ROOM GATE SCREEN ================= -->
+<div id="room-gate-screen" class="auth-wrap hidden">
+  <div class="auth-card" style="max-width:420px">
+    <div class="mark">Q</div>
+    <h2>Chào <span id="room-gate-username">bạn</span> 👋</h2>
+    <p class="sub">Bạn chưa thuộc phòng nào. Tạo phòng mới hoặc nhập mã phòng để tham gia.</p>
+    <div id="room-gate-error" class="auth-error hidden"></div>
+    <div class="field-row" style="margin-bottom:16px">
+      <button class="btn btn-primary" id="room-tab-create" style="flex:1;justify-content:center" onclick="toggleRoomTab('create')">Tạo phòng mới</button>
+      <button class="btn" id="room-tab-join" style="flex:1;justify-content:center" onclick="toggleRoomTab('join')">Tham gia phòng</button>
+    </div>
+    <div id="room-create-form">
+      <div class="field"><label>Tên phòng</label><input type="text" id="room-create-name" autocomplete="off" placeholder="VD: Phòng 302 - Chung cư ABC"></div>
+      <div class="field"><label>Mã phòng (để mời thành viên)</label><input type="text" id="room-create-code" autocomplete="off" placeholder="VD: PHONG302"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createRoom()">Tạo phòng &amp; trở thành Trưởng phòng</button>
+    </div>
+    <div id="room-join-form" class="hidden">
+      <div class="field"><label>Mã phòng</label><input type="text" id="room-join-code" autocomplete="off" placeholder="Nhập mã phòng được chia sẻ"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="joinRoom()">Tham gia phòng</button>
+    </div>
+    <div class="auth-toggle"><a onclick="doLogout()">Đăng xuất</a></div>
+  </div>
+</div>
+
 <!-- ================= APP ================= -->
 <div id="app" class="hidden">
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><div class="mark">Q</div> Quỹ Phòng</div>
+    <div class="sidebar-brand"><div class="mark">Q</div> <span id="sidebar-room-name">Quỹ Phòng</span></div>
     <nav class="nav" id="nav-menu"></nav>
     <div class="sidebar-foot">
       <div class="foot-avatar" id="foot-avatar-letter">?</div>
@@ -288,6 +312,15 @@
             <button class="btn btn-primary" onclick="changePassword()">Đổi mật khẩu</button>
           </div>
         </div>
+        <div class="grid grid-2" id="room-manage-card-wrap" style="margin-top:16px">
+          <div class="card">
+            <h3 style="margin-top:0">🔑 Quản lý phòng</h3>
+            <div class="field"><label>Tên phòng</label><input id="room-manage-name"></div>
+            <div class="field"><label>Mã phòng (chia sẻ để mời thành viên)</label><input id="room-manage-code" style="text-transform:uppercase"></div>
+            <button class="btn btn-primary" onclick="updateRoom()">Lưu mã phòng</button>
+          </div>
+        </div>
+
       </section>
 
     </div>
