@@ -129,7 +129,7 @@
           <button class="btn btn-amber" id="btn-add-income" onclick="openIncomeModal()">+ Thêm khoản thu</button>
         </div>
         <div class="filters">
-          <select id="income-filter-month" onchange="renderIncome()"></select>
+          <select id="income-filter-month" onchange="this.dataset.userSet='1'; renderIncome()"></select>
           <select id="income-filter-type" onchange="renderIncome()">
             <option value="">Tất cả loại</option>
             <option value="nop_quy">Nộp quỹ</option>
@@ -152,7 +152,7 @@
           <button class="btn btn-amber" id="btn-add-expense" onclick="openExpenseModal()">+ Thêm khoản chi</button>
         </div>
         <div class="filters">
-          <select id="expense-filter-month" onchange="renderExpenses()"></select>
+          <select id="expense-filter-month" onchange="this.dataset.userSet='1'; renderExpenses()"></select>
           <select id="expense-filter-type" onchange="renderExpenses()">
             <option value="">Tất cả loại</option>
             <option value="thue_phong">Tiền thuê phòng</option>
