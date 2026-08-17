@@ -786,6 +786,22 @@ async function setMonthlyDueAmount(){
     await doApply();
   }
 }
+async function deleteMonthlyDues(){
+  if(!canManage()){ toast('Chỉ trưởng phòng/thủ quỹ mới xóa được mức quỹ','err'); return; }
+  const month = document.getElementById('dues-month').value || currentMonthStr();
+  const rows = duesList.filter(d=>d.thang===month);
+  if(!rows.length){ toast('Tháng '+month+' chưa có mức quỹ nào để xóa','err'); return; }
+  const paidCount = rows.filter(d=>d.da_nop).length;
+  const warnPaid = paidCount ? ` (${paidCount} người đã đánh dấu "Đã nộp" — thông tin này sẽ mất luôn)` : '';
+  showConfirm(`Xóa toàn bộ mức quỹ chung tháng ${month} cho ${rows.length} thành viên${warnPaid}? Không thể hoàn tác.`, async ()=>{
+    const {error} = await sb.from('monthly_dues').delete().eq('room_id', myProfile.room_id).eq('thang', month);
+    if(error){ toast('Lỗi: '+error.message,'err'); return; }
+    await logActivity('xoa','monthly_dues', null, `Xóa mức quỹ chung tháng ${month} (${rows.length} thành viên)`);
+    document.getElementById('dues-amount-input').value = '';
+    await loadMonthlyDues(); populateMonthFilters(); renderMonthlyDues();
+    toast('Đã xóa mức quỹ tháng '+month);
+  }, {title:'Xóa mức quỹ tháng '+month, okText:'Xóa', danger:true});
+}
 function renderMonthlyDues(){
   document.getElementById('dues-manage-controls').style.display = canManage() ? 'flex' : 'none';
   const month = document.getElementById('dues-month').value || currentMonthStr();
@@ -1126,28 +1142,81 @@ function renderUpcomingCleaning(){
 function openCleaningModal(dateStr){
   const localToday = (function(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
   document.getElementById('cleaning-date').value = dateStr || localToday;
+  document.getElementById('cleaning-range-start').value = dateStr || localToday;
+  document.getElementById('cleaning-range-end').value = '';
+  document.querySelectorAll('.cleaning-weekday').forEach(cb=>cb.checked=false);
   document.getElementById('cleaning-ca').value = 'ca_ngay';
   document.getElementById('cleaning-note').value = '';
+  toggleCleaningMode('single');
   openModalEl('modal-cleaning');
+}
+function toggleCleaningMode(mode){
+  document.getElementById('modal-cleaning').dataset.mode = mode;
+  document.getElementById('cleaning-single-wrap').classList.toggle('hidden', mode!=='single');
+  document.getElementById('cleaning-range-wrap').classList.toggle('hidden', mode!=='range');
+  document.getElementById('cleaning-mode-single-btn').className = 'btn btn-sm'+(mode==='single'?' btn-primary':'');
+  document.getElementById('cleaning-mode-range-btn').className = 'btn btn-sm'+(mode==='range'?' btn-primary':'');
 }
 
 async function saveCleaning(){
-  if(!myProfile){ toast('Vui l\u00f2ng \u0111\u0103ng nh\u1eadp','err'); return; }
-  const date = document.getElementById('cleaning-date').value;
+  if(!myProfile){ toast('Vui lòng đăng nhập','err'); return; }
+  const mode = document.getElementById('modal-cleaning').dataset.mode || 'single';
   const ca = document.getElementById('cleaning-ca').value;
   const note = document.getElementById('cleaning-note').value.trim();
-  if(!date){ toast('Vui l\u00f2ng ch\u1ecdn ng\u00e0y','err'); return; }
-  const existing = cleaningList.find(c=>c.ngay===date && c.member_id===myProfile.id);
-  if(existing){ toast('B\u1ea1n \u0111\u00e3 \u0111\u0103ng k\u00fd v\u1ec7 sinh ng\u00e0y n\u00e0y r\u1ed3i!','err'); return; }
-  const {error} = await sb.from('cleaning_schedule').insert({
-    ngay:date, member_id:myProfile.id, ca, ghi_chu:note,
+
+  if(mode==='single'){
+    const date = document.getElementById('cleaning-date').value;
+    if(!date){ toast('Vui lòng chọn ngày','err'); return; }
+    const existing = cleaningList.find(c=>c.ngay===date && c.member_id===myProfile.id);
+    if(existing){ toast('Bạn đã đăng ký vệ sinh ngày này rồi!','err'); return; }
+    const {error} = await sb.from('cleaning_schedule').insert({
+      ngay:date, member_id:myProfile.id, ca, ghi_chu:note,
+      trang_thai:'chua_lam', nguoi_tao:currentUser.id, room_id: myProfile.room_id
+    });
+    if(error){ toast('Lỗi: '+error.message,'err'); return; }
+    await logActivity('them','cleaning_schedule',null,`${memberName(myProfile.id)} đăng ký vệ sinh ngày ${date}`);
+    closeModal('modal-cleaning');
+    await loadCleaning(); renderCleaning();
+    toast('🧹 Đã đăng ký lịch vệ sinh!');
+    return;
+  }
+
+  // Chế độ nhiều ngày
+  const start = document.getElementById('cleaning-range-start').value;
+  const end = document.getElementById('cleaning-range-end').value;
+  if(!start || !end){ toast('Vui lòng chọn đủ Từ ngày và Đến ngày','err'); return; }
+  if(end < start){ toast('"Đến ngày" phải sau "Từ ngày"','err'); return; }
+  const selectedWeekdays = Array.from(document.querySelectorAll('.cleaning-weekday:checked')).map(cb=>Number(cb.value));
+
+  const startD = new Date(start+'T00:00:00');
+  const endD = new Date(end+'T00:00:00');
+  const maxDays = 90;
+  const totalSpan = Math.round((endD-startD)/86400000)+1;
+  if(totalSpan > maxDays){ toast(`Khoảng thời gian tối đa ${maxDays} ngày, đang chọn ${totalSpan} ngày`,'err'); return; }
+
+  const datesToRegister = [];
+  for(let d=new Date(startD); d<=endD; d.setDate(d.getDate()+1)){
+    if(selectedWeekdays.length && !selectedWeekdays.includes(d.getDay())) continue;
+    const dateStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    datesToRegister.push(dateStr);
+  }
+  if(!datesToRegister.length){ toast('Không có ngày nào khớp với lựa chọn','err'); return; }
+
+  const already = new Set(cleaningList.filter(c=>c.member_id===myProfile.id).map(c=>c.ngay));
+  const newDates = datesToRegister.filter(d=>!already.has(d));
+  const skipped = datesToRegister.length - newDates.length;
+  if(!newDates.length){ toast('Bạn đã đăng ký hết tất cả các ngày này rồi!','err'); return; }
+
+  const rows = newDates.map(dateStr=>({
+    ngay:dateStr, member_id:myProfile.id, ca, ghi_chu:note,
     trang_thai:'chua_lam', nguoi_tao:currentUser.id, room_id: myProfile.room_id
-  });
-  if(error){ toast('L\u1ed7i: '+error.message,'err'); return; }
-  await logActivity('them','cleaning_schedule',null,`${memberName(myProfile.id)} \u0111\u0103ng k\u00fd v\u1ec7 sinh ng\u00e0y ${date}`);
+  }));
+  const {error} = await sb.from('cleaning_schedule').insert(rows);
+  if(error){ toast('Lỗi: '+error.message,'err'); return; }
+  await logActivity('them','cleaning_schedule',null,`${memberName(myProfile.id)} đăng ký vệ sinh ${newDates.length} ngày (${start} → ${end})`);
   closeModal('modal-cleaning');
   await loadCleaning(); renderCleaning();
-  toast('\ud83e\uddf9 \u0110\u00e3 \u0111\u0103ng k\u00fd l\u1ecbch v\u1ec7 sinh!');
+  toast(`🧹 Đã đăng ký ${newDates.length} ngày!`+(skipped?` (bỏ qua ${skipped} ngày đã đăng ký trước đó)`:''));
 }
 
 async function markCleaningDone(id, dateStr){
