@@ -511,12 +511,13 @@ function renderIncome(){
       <td class="num" style="color:var(--green);font-weight:700">${fmtVND(x.so_tien)}</td>
       <td>${x.thang}</td>
       <td>${memberName(x.nguoi_tao)}</td>
-      <td>${canDel ? `<button class="btn btn-sm btn-danger" onclick="deleteIncome('${x.id}')">Xóa</button>` : ''}</td>
+      <td>${canDel ? `<button class="btn btn-sm" onclick="editIncome('${x.id}')">Sửa</button> <button class="btn btn-sm btn-danger" onclick="deleteIncome('${x.id}')">Xóa</button>` : ''}</td>
     </tr>`;
   }).join('');
   updateBulkBar('income');
 }
 function openIncomeModal(){
+  document.getElementById('income-modal-title').textContent = 'Thêm khoản thu';
   document.getElementById('income-id').value='';
   document.getElementById('income-type').value='nop_quy';
   document.getElementById('income-amount').value='';
@@ -524,6 +525,21 @@ function openIncomeModal(){
   document.getElementById('income-desc').value='';
   document.getElementById('income-image').value='';
   document.getElementById('income-type-custom').value='';
+  toggleCustomType('income');
+  openModalEl('modal-income');
+}
+function editIncome(id){
+  const x = incomeList.find(i=>i.id===id);
+  if(!x) return;
+  document.getElementById('income-modal-title').textContent = 'Sửa khoản thu';
+  document.getElementById('income-id').value = x.id;
+  const isKnownType = ['nop_quy','quy_an_uong','thu_khac'].includes(x.loai);
+  document.getElementById('income-type').value = isKnownType ? x.loai : '__custom__';
+  document.getElementById('income-type-custom').value = isKnownType ? '' : x.loai;
+  document.getElementById('income-amount').value = x.so_tien;
+  document.getElementById('income-month').value = x.thang;
+  document.getElementById('income-desc').value = x.mo_ta || '';
+  document.getElementById('income-image').value = '';
   toggleCustomType('income');
   openModalEl('modal-income');
 }
@@ -535,22 +551,46 @@ async function saveIncome(){
     loai = document.getElementById('income-type-custom').value.trim();
     if(!loai){ toast('Vui lòng nhập tên loại khoản thu','err'); return; }
   }
+  const editId = document.getElementById('income-id').value;
   let imgUrl = await uploadReceipt(document.getElementById('income-image'), 'income');
   const payload = {
     loai,
     so_tien: amount,
     mo_ta: document.getElementById('income-desc').value.trim(),
     thang: document.getElementById('income-month').value || currentMonthStr(),
-    nguoi_tao: currentUser.id,
-    room_id: myProfile.room_id,
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
+  if(editId){
+    const original = incomeList.find(i=>i.id===editId);
+    const {error} = await sb.from('income').update(payload).eq('id', editId);
+    if(error){ toast('Lỗi khi lưu: '+error.message, 'err'); return; }
+    await logActivity('sua','income', editId, `Sửa khoản thu ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
+    if(payload.loai==='nop_quy' && original) await autoMarkDuePaid(original.nguoi_tao, payload.thang);
+    closeModal('modal-income');
+    await loadIncome(); populateMonthFilters(); renderIncome(); renderDashboard(); renderReports();
+    toast('Đã cập nhật khoản thu');
+    return;
+  }
+  payload.nguoi_tao = currentUser.id;
+  payload.room_id = myProfile.room_id;
   const {error} = await sb.from('income').insert(payload);
   if(error){ toast('Lỗi khi lưu: '+error.message, 'err'); return; }
   await logActivity('them','income', null, `Thêm khoản thu ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
+  if(payload.loai==='nop_quy') await autoMarkDuePaid(currentUser.id, payload.thang);
   closeModal('modal-income');
   await loadIncome(); populateMonthFilters(); renderIncome(); renderDashboard(); renderReports();
   toast('Đã thêm khoản thu');
+}
+// Tự động đánh dấu "Đã nộp" cho quỹ chung hàng tháng khi có khoản thu "Nộp quỹ" khớp thành viên + tháng
+async function autoMarkDuePaid(memberId, month){
+  if(!memberId || !month) return;
+  await loadMonthlyDues();
+  const due = duesList.find(d=>d.member_id===memberId && d.thang===month);
+  if(!due || due.da_nop) return;
+  await sb.from('monthly_dues').update({da_nop:true, ngay_nop:new Date().toISOString()}).eq('id', due.id);
+  await logActivity('thanh_toan','monthly_dues', due.id, `${memberName(memberId)} đã nộp quỹ chung tháng ${month} (tự động từ khoản thu)`);
+  await loadMonthlyDues();
+  if(document.getElementById('page-payments') && document.getElementById('page-payments').classList.contains('active')) renderMonthlyDues();
 }
 async function deleteIncome(id){
   showConfirm('Xóa khoản thu này?', async ()=>{
@@ -585,13 +625,14 @@ function renderExpenses(){
       <td>${memberName(x.nguoi_tao)}</td>
       <td>
         ${canManage() ? `<button class="btn btn-sm" onclick="quickSplitFromExpense('${x.id}')">Chia</button>` : ''}
-        ${canDel ? `<button class="btn btn-sm btn-danger" onclick="deleteExpense('${x.id}')">Xóa</button>` : ''}
+        ${canDel ? `<button class="btn btn-sm" onclick="editExpense('${x.id}')">Sửa</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('${x.id}')">Xóa</button>` : ''}
       </td>
     </tr>`;
   }).join('');
   updateBulkBar('expense');
 }
 function openExpenseModal(){
+  document.getElementById('expense-modal-title').textContent = 'Thêm khoản chi';
   document.getElementById('expense-id').value='';
   document.getElementById('expense-type').value='do_dung_chung';
   document.getElementById('expense-amount').value='';
@@ -599,6 +640,22 @@ function openExpenseModal(){
   document.getElementById('expense-desc').value='';
   document.getElementById('expense-image').value='';
   document.getElementById('expense-type-custom').value='';
+  toggleCustomType('expense');
+  openModalEl('modal-expense');
+}
+function editExpense(id){
+  const x = expenseList.find(i=>i.id===id);
+  if(!x) return;
+  document.getElementById('expense-modal-title').textContent = 'Sửa khoản chi';
+  document.getElementById('expense-id').value = x.id;
+  const knownTypes = ['thue_phong','tien_dien','tien_nuoc','internet','quy_chung','do_dung_chung','sua_chua','ve_sinh','sinh_hoat','phat_sinh'];
+  const isKnownType = knownTypes.includes(x.loai);
+  document.getElementById('expense-type').value = isKnownType ? x.loai : '__custom__';
+  document.getElementById('expense-type-custom').value = isKnownType ? '' : x.loai;
+  document.getElementById('expense-amount').value = x.so_tien;
+  document.getElementById('expense-month').value = x.thang;
+  document.getElementById('expense-desc').value = x.mo_ta || '';
+  document.getElementById('expense-image').value = '';
   toggleCustomType('expense');
   openModalEl('modal-expense');
 }
@@ -610,16 +667,26 @@ async function saveExpense(){
     loai = document.getElementById('expense-type-custom').value.trim();
     if(!loai){ toast('Vui lòng nhập tên loại khoản chi','err'); return; }
   }
+  const editId = document.getElementById('expense-id').value;
   let imgUrl = await uploadReceipt(document.getElementById('expense-image'), 'expenses');
   const payload = {
     loai,
     so_tien: amount,
     mo_ta: document.getElementById('expense-desc').value.trim(),
     thang: document.getElementById('expense-month').value || currentMonthStr(),
-    nguoi_tao: currentUser.id,
-    room_id: myProfile.room_id,
   };
   if(imgUrl) payload.hinh_anh_url = imgUrl;
+  if(editId){
+    const {error} = await sb.from('expenses').update(payload).eq('id', editId);
+    if(error){ toast('Lỗi khi lưu: '+error.message, 'err'); return; }
+    await logActivity('sua','expenses', editId, `Sửa khoản chi ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
+    closeModal('modal-expense');
+    await loadExpenses(); populateMonthFilters(); renderExpenses(); renderDashboard(); renderReports();
+    toast('Đã cập nhật khoản chi');
+    return;
+  }
+  payload.nguoi_tao = currentUser.id;
+  payload.room_id = myProfile.room_id;
   const {error} = await sb.from('expenses').insert(payload);
   if(error){ toast('Lỗi khi lưu: '+error.message, 'err'); return; }
   await logActivity('them','expenses', null, `Thêm khoản chi ${typeLabelOf(payload.loai)}: ${fmtVND(amount)}`);
@@ -692,12 +759,35 @@ function quickSplitFromExpense(id){
 let splitSourceExpense = null;
 function openSplitModal(expense){
   splitSourceExpense = expense || null;
+  document.getElementById('split-modal-title').textContent = 'Tạo phiếu chia chi phí';
+  document.getElementById('split-save-btn').textContent = 'Tạo phiếu';
+  document.getElementById('split-id').value = '';
   document.getElementById('split-name').value = expense ? `${typeLabelOf(expense.loai)} - ${expense.thang}` : '';
   document.getElementById('split-total').value = expense ? expense.so_tien : '';
   document.getElementById('split-month').value = expense ? expense.thang : currentMonthStr();
   document.getElementById('split-method').value = 'deu';
   openModalEl('modal-split');
   recalcSplit();
+}
+function editSplit(id){
+  const s = splitList.find(x=>x.id===id);
+  if(!s) return;
+  splitSourceExpense = null;
+  document.getElementById('split-modal-title').textContent = 'Sửa phiếu chia chi phí';
+  document.getElementById('split-save-btn').textContent = 'Cập nhật';
+  document.getElementById('split-id').value = s.id;
+  document.getElementById('split-name').value = s.ten;
+  document.getElementById('split-total').value = s.tong_tien;
+  document.getElementById('split-month').value = s.thang;
+  document.getElementById('split-method').value = s.phuong_thuc;
+  openModalEl('modal-split');
+  // Tải lại danh sách theo phương thức, sau đó ghi đè bằng số tiền đã lưu thực tế cho từng người
+  recalcSplit();
+  const dets = splitDetails.filter(d=>d.split_id===id);
+  dets.forEach(d=>{
+    const input = document.querySelector(`.split-amount-input[data-id="${d.member_id}"]`);
+    if(input) input.value = Math.round(d.so_tien);
+  });
 }
 function activeMembers(){ return members.filter(m=>m.status==='active'); }
 function recalcSplit(){
@@ -746,6 +836,20 @@ async function saveSplit(){
   if(!name || !total){ toast('Vui lòng nhập đủ tên và tổng số tiền','err'); return; }
   const inputs = document.querySelectorAll('.split-amount-input');
   const details = Array.from(inputs).map(i=>({member_id:i.dataset.id, so_tien: Number(i.value)||0}));
+  const editId = document.getElementById('split-id').value;
+
+  if(editId){
+    const {error} = await sb.from('splits').update({ten:name, tong_tien: total, phuong_thuc: method, thang: month}).eq('id', editId);
+    if(error){ toast('Lỗi cập nhật phiếu chia: '+error.message,'err'); return; }
+    await sb.from('split_details').delete().eq('split_id', editId);
+    const rows = details.map(d=>({split_id: editId, member_id: d.member_id, so_tien: d.so_tien, room_id: myProfile.room_id}));
+    if(rows.length) await sb.from('split_details').insert(rows);
+    await logActivity('sua','splits', editId, `Sửa phiếu chia "${name}" (${fmtVND(total)})`);
+    closeModal('modal-split');
+    await loadSplits(); renderSplits(); renderPayments();
+    toast('Đã cập nhật phiếu chia chi phí');
+    return;
+  }
 
   const {data: splitRow, error} = await sb.from('splits').insert({
     ten:name, tong_tien: total, phuong_thuc: method, thang: month,
@@ -772,7 +876,10 @@ function renderSplits(){
       <td><span class="tag amber">${methodLabel[s.phuong_thuc]||s.phuong_thuc}</span></td>
       <td>${s.thang}</td>
       <td>${new Date(s.created_at).toLocaleDateString('vi-VN')}</td>
-      <td><button class="btn btn-sm" onclick="viewSplitDetail('${s.id}')">Xem chi tiết</button></td>
+      <td>
+        <button class="btn btn-sm" onclick="viewSplitDetail('${s.id}')">Xem chi tiết</button>
+        ${canManage() ? `<button class="btn btn-sm" onclick="editSplit('${s.id}')">Sửa</button>` : ''}
+      </td>
     </tr>`).join('');
 }
 function viewSplitDetail(id){
