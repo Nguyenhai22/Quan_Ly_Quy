@@ -186,6 +186,7 @@
           <span id="dues-manage-controls" style="display:flex;gap:8px;align-items:center">
             <input type="number" id="dues-amount-input" placeholder="Mức quỹ / người (đ)" style="width:170px">
             <button class="btn btn-primary btn-sm" onclick="setMonthlyDueAmount()">Áp dụng cho tháng này</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteMonthlyDues()">Xóa mức quỹ tháng này</button>
           </span>
         </div>
         <div class="table-wrap">
@@ -431,8 +432,32 @@
       <button class="btn-ghost" onclick="closeModal('modal-cleaning')">✕</button>
     </div>
     <div class="field">
+      <label>Kiểu đăng ký</label>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-primary" id="cleaning-mode-single-btn" onclick="toggleCleaningMode('single')" style="flex:1">Một ngày</button>
+        <button class="btn btn-sm" id="cleaning-mode-range-btn" onclick="toggleCleaningMode('range')" style="flex:1">Nhiều ngày</button>
+      </div>
+    </div>
+    <div class="field" id="cleaning-single-wrap">
       <label>Ngày vệ sinh</label>
       <input type="date" id="cleaning-date">
+    </div>
+    <div class="field hidden" id="cleaning-range-wrap">
+      <label>Khoảng thời gian</label>
+      <div class="field-row">
+        <div class="field"><label style="font-weight:400;font-size:11px">Từ ngày</label><input type="date" id="cleaning-range-start"></div>
+        <div class="field"><label style="font-weight:400;font-size:11px">Đến ngày</label><input type="date" id="cleaning-range-end"></div>
+      </div>
+      <label>Lặp lại vào các thứ <span style="font-weight:400;color:var(--muted)">(không chọn = đăng ký tất cả các ngày trong khoảng)</span></label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:12.5px"><input type="checkbox" class="cleaning-weekday" value="1">T2</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:12.5px"><input type="checkbox" class="cleaning-weekday" value="2">T3</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:12.5px"><input type="checkbox" class="cleaning-weekday" value="3">T4</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:12.5px"><input type="checkbox" class="cleaning-weekday" value="4">T5</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:12.5px"><input type="checkbox" class="cleaning-weekday" value="5">T6</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:12.5px"><input type="checkbox" class="cleaning-weekday" value="6">T7</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:12.5px"><input type="checkbox" class="cleaning-weekday" value="0">CN</label>
+      </div>
     </div>
     <div class="field">
       <label>Ca vệ sinh</label>
