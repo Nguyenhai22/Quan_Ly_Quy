@@ -757,6 +757,7 @@ async function bulkDelete(kind){
 // ============================================================
 // QUỸ CHUNG HÀNG THÁNG (MONTHLY DUES)
 // ============================================================
+function activeMembers(){ return members.filter(m=>m.status==='active'); }
 async function setMonthlyDueAmount(){
   if(!canManage()){ toast('Chỉ trưởng phòng/thủ quỹ mới đặt được mức quỹ','err'); return; }
   const month = document.getElementById('dues-month').value || currentMonthStr();
