@@ -176,19 +176,6 @@
         </div>
       </section>
 
-      <!-- ===== SPLIT ===== -->
-      <section class="page" id="page-split">
-        <div class="section-title"><h2>Chia chi phí</h2>
-          <button class="btn btn-primary" onclick="openSplitModal()">+ Tạo phiếu chia chi phí</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Tên phiếu</th><th>Tổng tiền</th><th>Phương thức</th><th>Tháng</th><th>Đã tạo</th><th></th></tr></thead>
-            <tbody id="splits-tbody"><tr><td colspan="6" class="empty">Đang tải…</td></tr></tbody>
-          </table>
-        </div>
-      </section>
-
       <!-- ===== PAYMENTS ===== -->
       <section class="page" id="page-payments">
         <div class="section-title"><h2>Quỹ chung hàng tháng</h2>
@@ -205,16 +192,6 @@
           <table>
             <thead><tr><th>Thành viên</th><th>Số tiền cần nộp</th><th>Trạng thái</th><th>Ngày nộp</th><th></th></tr></thead>
             <tbody id="dues-tbody"><tr><td colspan="5" class="empty">Đang tải…</td></tr></tbody>
-          </table>
-        </div>
-
-        <div class="section-title"><h2>Công nợ theo phiếu chia chi phí</h2>
-          <span class="hint">Theo dõi ai đã trả, ai còn nợ cho từng phiếu chia</span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Thành viên</th><th>Phiếu chia</th><th>Số tiền phải trả</th><th>Trạng thái</th><th>Ngày thanh toán</th><th></th></tr></thead>
-            <tbody id="payments-tbody"><tr><td colspan="6" class="empty">Đang tải…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -419,31 +396,6 @@
     <div class="field"><label>Mô tả</label><textarea id="expense-desc"></textarea></div>
     <div class="field"><label>Ảnh hóa đơn (không bắt buộc)</label><input type="file" id="expense-image" accept="image/*"></div>
     <div class="modal-foot"><button class="btn" onclick="closeModal('modal-expense')">Hủy</button><button class="btn btn-primary" onclick="saveExpense()">Lưu</button></div>
-  </div>
-</div>
-
-<div class="modal-backdrop hidden" id="modal-split">
-  <div class="modal wide">
-    <div class="modal-head"><h3 id="split-modal-title">Tạo phiếu chia chi phí</h3><button class="btn-ghost" onclick="closeModal('modal-split')">✕</button></div>
-    <input type="hidden" id="split-id">
-    <div class="field"><label>Tên phiếu</label><input id="split-name" placeholder="VD: Tiền điện tháng 7"></div>
-    <div class="field-row">
-      <div class="field"><label>Tổng số tiền (đ)</label><input type="number" id="split-total" oninput="recalcSplit()"></div>
-      <div class="field"><label>Tháng</label><input type="month" id="split-month"></div>
-    </div>
-    <div class="field"><label>Phương thức chia</label>
-      <select id="split-method" onchange="recalcSplit()">
-        <option value="deu">Chia đều cho tất cả thành viên</option>
-        <option value="theo_ngay">Chia theo số ngày ở trong tháng</option>
-        <option value="theo_nguoi">Chia theo số người chọn</option>
-        <option value="tuy_chinh">Tùy chỉnh số tiền từng người</option>
-      </select>
-    </div>
-    <div class="field" id="split-members-wrap">
-      <label>Số tiền mỗi người</label>
-      <div id="split-members-list"></div>
-    </div>
-    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-split')">Hủy</button><button class="btn btn-primary" id="split-save-btn" onclick="saveSplit()">Tạo phiếu</button></div>
   </div>
 </div>
 
