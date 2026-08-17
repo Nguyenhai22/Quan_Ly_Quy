@@ -133,29 +133,34 @@ async function doLogout(){
 }
 
 async function bootAfterLogin(user){
-  currentUser = user;
-  let {data: profile, error: profErr} = await sb.from('profiles').select('*').eq('id', user.id).single();
-  if(profErr && profErr.code !== 'PGRST116'){
-    // PGRST116 = không tìm thấy dòng nào (bình thường với user mới) — các lỗi khác thì báo rõ, không crash
-    alert('Lỗi tải hồ sơ: '+profErr.message+'\n\nHãy kiểm tra lại RLS policy trên bảng profiles trong Supabase.');
-    return;
-  }
-  if(!profile){
-    // fallback: create profile if missing (e.g. first admin)
-    const insertRes = await sb.from('profiles').insert({id:user.id, full_name:user.email, email:user.email, role:'thanh_vien'}).select().single();
-    if(insertRes.error){ alert('Lỗi tạo hồ sơ: '+insertRes.error.message); return; }
-    profile = insertRes.data;
-  }
-  myProfile = profile;
-  document.getElementById('auth-screen').classList.add('hidden');
+  try {
+    currentUser = user;
+    let {data: profile, error: profErr} = await sb.from('profiles').select('*').eq('id', user.id).single();
+    if(profErr && profErr.code !== 'PGRST116'){
+      // PGRST116 = không tìm thấy dòng nào (bình thường với user mới) — các lỗi khác thì báo rõ, không crash
+      alert('Lỗi tải hồ sơ: '+profErr.message+'\n\nHãy kiểm tra lại RLS policy trên bảng profiles trong Supabase.');
+      return;
+    }
+    if(!profile){
+      // fallback: create profile if missing (e.g. first admin)
+      const insertRes = await sb.from('profiles').insert({id:user.id, full_name:user.email, email:user.email, role:'thanh_vien'}).select().single();
+      if(insertRes.error){ alert('Lỗi tạo hồ sơ: '+insertRes.error.message); return; }
+      profile = insertRes.data;
+    }
+    myProfile = profile;
+    document.getElementById('auth-screen').classList.add('hidden');
 
-  if(!myProfile.room_id){
-    showRoomGate();
-    return;
+    if(!myProfile.room_id){
+      showRoomGate();
+      return;
+    }
+    const {data: room} = await sb.from('rooms').select('*').eq('id', myProfile.room_id).maybeSingle();
+    myRoom = room || null;
+    await enterApp();
+  } catch(e){
+    console.error('bootAfterLogin', e);
+    alert('Không thể tải ứng dụng: '+(e.message||e)+'\n\nHãy kiểm tra kết nối mạng và thử tải lại trang.');
   }
-  const {data: room} = await sb.from('rooms').select('*').eq('id', myProfile.room_id).maybeSingle();
-  myRoom = room || null;
-  await enterApp();
 }
 
 // ============================================================
@@ -285,8 +290,26 @@ function applyRoleVisibility(){
 // ============================================================
 // LOAD ALL DATA
 // ============================================================
+// Bọc mọi truy vấn Supabase: nếu lỗi (mất mạng, RLS chặn, bảng lỗi...) sẽ báo toast
+// và trả về mảng rỗng thay vì ném lỗi làm treo cả trang ở trạng thái "Đang tải…"
+async function safeQuery(promise, label){
+  try {
+    const {data, error} = await promise;
+    if(error){ console.error('['+label+']', error); toast('Không tải được '+label+': '+error.message, 'err'); return []; }
+    return data || [];
+  } catch(e){
+    console.error('['+label+']', e);
+    toast('Lỗi kết nối khi tải '+label+' (kiểm tra mạng hoặc thử tải lại trang)', 'err');
+    return [];
+  }
+}
 async function loadAll(){
-  await Promise.all([loadMembers(), loadIncome(), loadExpenses(), loadNotifications(), loadActivity(), loadMonthlyDues(), loadCleaning()]);
+  try {
+    await Promise.all([loadMembers(), loadIncome(), loadExpenses(), loadNotifications(), loadActivity(), loadMonthlyDues(), loadCleaning()]);
+  } catch(e){
+    console.error('loadAll', e);
+    toast('Có lỗi khi tải dữ liệu, một số phần có thể hiển thị thiếu. Thử tải lại trang.', 'err');
+  }
   renderDashboard();
   renderMembers();
   populateMonthFilters();
@@ -299,31 +322,23 @@ async function loadAll(){
 }
 
 async function loadMonthlyDues(){
-  const {data} = await sb.from('monthly_dues').select('*').eq('room_id', myProfile.room_id).order('thang', {ascending:false});
-  duesList = data || [];
+  duesList = await safeQuery(sb.from('monthly_dues').select('*').eq('room_id', myProfile.room_id).order('thang', {ascending:false}), 'quỹ chung hàng tháng');
 }
 
 async function loadMembers(){
-  const {data} = await sb.from('profiles').select('*').eq('room_id', myProfile.room_id).order('created_at');
-  members = data || [];
+  members = await safeQuery(sb.from('profiles').select('*').eq('room_id', myProfile.room_id).order('created_at'), 'thành viên');
 }
 async function loadIncome(){
-  const {data, error} = await sb.from('income').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false});
-  if(error){ toast('Không tải được khoản thu: '+error.message, 'err'); }
-  incomeList = data || [];
+  incomeList = await safeQuery(sb.from('income').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false}), 'khoản thu');
 }
 async function loadExpenses(){
-  const {data, error} = await sb.from('expenses').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false});
-  if(error){ toast('Không tải được khoản chi: '+error.message, 'err'); }
-  expenseList = data || [];
+  expenseList = await safeQuery(sb.from('expenses').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false}), 'khoản chi');
 }
 async function loadNotifications(){
-  const {data} = await sb.from('notifications').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false});
-  notifList = data || [];
+  notifList = await safeQuery(sb.from('notifications').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false}), 'thông báo');
 }
 async function loadActivity(){
-  const {data} = await sb.from('activity_log').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false}).limit(200);
-  activityList = data || [];
+  activityList = await safeQuery(sb.from('activity_log').select('*').eq('room_id', myProfile.room_id).order('created_at', {ascending:false}).limit(200), 'nhật ký hoạt động');
 }
 async function logActivity(hanh_dong, bang, record_id, mo_ta){
   await sb.from('activity_log').insert({hanh_dong, bang, record_id, mo_ta, nguoi_thuc_hien: currentUser.id, room_id: myProfile.room_id});
@@ -970,8 +985,7 @@ function renderStatistics(){
 // LỊCH VỆ SINH
 // ============================================================
 async function loadCleaning(){
-  const {data} = await sb.from('cleaning_schedule').select('*').eq('room_id', myProfile.room_id).order('ngay');
-  cleaningList = data || [];
+  cleaningList = await safeQuery(sb.from('cleaning_schedule').select('*').eq('room_id', myProfile.room_id).order('ngay'), 'lịch vệ sinh');
 }
 
 function changeCleaningMonth(delta){
@@ -1201,6 +1215,11 @@ async function changePassword(){
 // INIT
 // ============================================================
 (async function init(){
-  const {data:{session}} = await sb.auth.getSession();
-  if(session?.user){ await bootAfterLogin(session.user); }
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if(session?.user){ await bootAfterLogin(session.user); }
+  } catch(e){
+    console.error('init', e);
+    alert('Không thể kết nối máy chủ: '+(e.message||e)+'\n\nHãy kiểm tra kết nối mạng và thử tải lại trang.');
+  }
 })();
