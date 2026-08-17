@@ -764,25 +764,42 @@ async function setMonthlyDueAmount(){
   const amount = Number(document.getElementById('dues-amount-input').value);
   if(!amount || amount<=0){ toast('Vui lòng nhập mức quỹ hợp lệ','err'); return; }
   const list = activeMembers();
-  for(const m of list){
-    const existing = duesList.find(d=>d.member_id===m.id && d.thang===month);
-    if(existing){
-      await sb.from('monthly_dues').update({so_tien: amount}).eq('id', existing.id);
-    } else {
-      await sb.from('monthly_dues').insert({member_id: m.id, thang: month, so_tien: amount, da_nop:false, room_id: myProfile.room_id});
+  const existingForMonth = list.map(m=>duesList.find(d=>d.member_id===m.id && d.thang===month)).filter(Boolean);
+  const doApply = async ()=>{
+    for(const m of list){
+      const existing = duesList.find(d=>d.member_id===m.id && d.thang===month);
+      if(existing){
+        await sb.from('monthly_dues').update({so_tien: amount}).eq('id', existing.id);
+      } else {
+        await sb.from('monthly_dues').insert({member_id: m.id, thang: month, so_tien: amount, da_nop:false, room_id: myProfile.room_id});
+      }
     }
+    await logActivity('them','monthly_dues', null, `${existingForMonth.length?'Sửa':'Đặt'} mức quỹ chung ${fmtVND(amount)}/người cho tháng ${month}`);
+    document.getElementById('dues-amount-input').value = '';
+    await loadMonthlyDues(); populateMonthFilters(); renderMonthlyDues();
+    toast(`Đã ${existingForMonth.length?'cập nhật':'áp dụng'} mức quỹ cho tháng `+month);
+  };
+  if(existingForMonth.length){
+    const oldAmount = existingForMonth[0].so_tien;
+    showConfirm(`Tháng ${month} đã đặt mức quỹ ${fmtVND(oldAmount)}/người. Đổi thành ${fmtVND(amount)}/người cho tất cả ${list.length} thành viên? (Trạng thái đã nộp/chưa nộp của từng người giữ nguyên)`, doApply, {title:'Sửa mức quỹ cả tháng', okText:'Áp dụng', danger:false});
+  } else {
+    await doApply();
   }
-  await logActivity('them','monthly_dues', null, `Đặt mức quỹ chung ${fmtVND(amount)}/người cho tháng ${month}`);
-  document.getElementById('dues-amount-input').value = '';
-  await loadMonthlyDues(); populateMonthFilters(); renderMonthlyDues();
-  toast('Đã áp dụng mức quỹ cho tháng '+month);
 }
 function renderMonthlyDues(){
   document.getElementById('dues-manage-controls').style.display = canManage() ? 'flex' : 'none';
   const month = document.getElementById('dues-month').value || currentMonthStr();
   const list = activeMembers();
   const tbody = document.getElementById('dues-tbody');
+  // Điền sẵn mức quỹ hiện tại của tháng đang xem vào ô nhập, để thấy rõ đang "sửa" giá trị nào
+  const amountInput = document.getElementById('dues-amount-input');
+  if(amountInput && document.activeElement !== amountInput){
+    const existing = list.map(m=>duesList.find(d=>d.member_id===m.id && d.thang===month)).find(Boolean);
+    amountInput.value = existing ? existing.so_tien : '';
+    amountInput.placeholder = existing ? `Hiện tại: ${fmtVND(existing.so_tien)}` : 'Mức quỹ / người (đ)';
+  }
   if(!list.length){ tbody.innerHTML = '<tr><td colspan="5" class="empty">Chưa có thành viên đang ở phòng.</td></tr>'; return; }
+  const manage = canManage();
   const rows = list.map(m=>{
     const due = duesList.find(d=>d.member_id===m.id && d.thang===month);
     const isMe = myProfile && m.id === myProfile.id;
@@ -798,15 +815,33 @@ function renderMonthlyDues(){
       statusCell = '<span class="tag red">Chưa nộp</span>';
       actionCell = canAct ? `<button class="btn btn-sm btn-primary" onclick="markDuePaid('${due.id}')">Đánh dấu đã nộp</button>` : '';
     }
+    const editBtn = manage ? `<button class="btn btn-sm" onclick="editDueAmount('${m.id}','${month}','${due?due.id:''}',${due?due.so_tien:0})">Sửa</button>` : '';
     return `<tr>
       <td><span class="member-avatar">${m.full_name.charAt(0).toUpperCase()}</span>${m.full_name}</td>
       <td class="num">${due ? fmtVND(due.so_tien) : '—'}</td>
       <td>${statusCell}</td>
       <td>${due && due.ngay_nop ? new Date(due.ngay_nop).toLocaleDateString('vi-VN') : '—'}</td>
-      <td>${actionCell}</td>
+      <td>${actionCell} ${editBtn}</td>
     </tr>`;
   });
   tbody.innerHTML = rows.join('');
+}
+async function editDueAmount(memberId, month, dueId, currentAmount){
+  if(!canManage()){ toast('Chỉ trưởng phòng/thủ quỹ mới sửa được mức quỹ','err'); return; }
+  const input = prompt('Nhập mức quỹ mới cho thành viên này (tháng '+month+'):', currentAmount||'');
+  if(input===null) return;
+  const amount = Number(input);
+  if(!amount || amount<=0){ toast('Số tiền không hợp lệ','err'); return; }
+  if(dueId){
+    const {error} = await sb.from('monthly_dues').update({so_tien: amount}).eq('id', dueId);
+    if(error){ toast('Lỗi: '+error.message,'err'); return; }
+  } else {
+    const {error} = await sb.from('monthly_dues').insert({member_id: memberId, thang: month, so_tien: amount, da_nop:false, room_id: myProfile.room_id});
+    if(error){ toast('Lỗi: '+error.message,'err'); return; }
+  }
+  await logActivity('sua','monthly_dues', dueId||null, `Sửa mức quỹ ${fmtVND(amount)} cho ${memberName(memberId)} tháng ${month}`);
+  await loadMonthlyDues(); renderMonthlyDues();
+  toast('Đã cập nhật mức quỹ');
 }
 async function markDuePaid(dueId){
   await sb.from('monthly_dues').update({da_nop:true, ngay_nop:new Date().toISOString()}).eq('id', dueId);
