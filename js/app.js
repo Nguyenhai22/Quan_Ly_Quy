@@ -461,9 +461,19 @@ function currentMonthStr(){ const d=new Date(); return d.getFullYear()+'-'+Strin
 function populateMonthFilters(){
   const months = new Set([...incomeList.map(x=>x.thang), ...expenseList.map(x=>x.thang), currentMonthStr()]);
   const arr = Array.from(months).sort().reverse();
+  const latestMonth = arr[0] || currentMonthStr();
   const opts = '<option value="">Tất cả tháng</option>' + arr.map(m=>`<option value="${m}">${m}</option>`).join('');
-  document.getElementById('income-filter-month').innerHTML = opts;
-  document.getElementById('expense-filter-month').innerHTML = opts;
+
+  const incomeSel = document.getElementById('income-filter-month');
+  const incomeKeep = incomeSel.dataset.userSet==='1' && arr.includes(incomeSel.value) ? incomeSel.value : latestMonth;
+  incomeSel.innerHTML = opts;
+  incomeSel.value = incomeKeep;
+
+  const expenseSel = document.getElementById('expense-filter-month');
+  const expenseKeep = expenseSel.dataset.userSet==='1' && arr.includes(expenseSel.value) ? expenseSel.value : latestMonth;
+  expenseSel.innerHTML = opts;
+  expenseSel.value = expenseKeep;
+
   document.getElementById('report-month').innerHTML = arr.map(m=>`<option value="${m}">${m}</option>`).join('');
   document.getElementById('income-month').value = currentMonthStr();
   document.getElementById('expense-month').value = currentMonthStr();
