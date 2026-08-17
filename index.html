@@ -424,7 +424,8 @@
 
 <div class="modal-backdrop hidden" id="modal-split">
   <div class="modal wide">
-    <div class="modal-head"><h3>Tạo phiếu chia chi phí</h3><button class="btn-ghost" onclick="closeModal('modal-split')">✕</button></div>
+    <div class="modal-head"><h3 id="split-modal-title">Tạo phiếu chia chi phí</h3><button class="btn-ghost" onclick="closeModal('modal-split')">✕</button></div>
+    <input type="hidden" id="split-id">
     <div class="field"><label>Tên phiếu</label><input id="split-name" placeholder="VD: Tiền điện tháng 7"></div>
     <div class="field-row">
       <div class="field"><label>Tổng số tiền (đ)</label><input type="number" id="split-total" oninput="recalcSplit()"></div>
@@ -442,7 +443,7 @@
       <label>Số tiền mỗi người</label>
       <div id="split-members-list"></div>
     </div>
-    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-split')">Hủy</button><button class="btn btn-primary" onclick="saveSplit()">Tạo phiếu</button></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal('modal-split')">Hủy</button><button class="btn btn-primary" id="split-save-btn" onclick="saveSplit()">Tạo phiếu</button></div>
   </div>
 </div>
 
